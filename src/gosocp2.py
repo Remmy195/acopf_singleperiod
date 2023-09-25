@@ -6,105 +6,6 @@ import time
 import math
 
 
-def getsol_knitro(log,all_data):
-
-    casefilename = all_data['casefilename']
-    casename = casefilename.split('/')[2].split('.')[0]
-    #filename = 'knitro_sols/'+ casename +'.txt'
-    filename = 'ksol_'+ casename +'.txt'
-    try:
-        thefile = open(filename, "r")
-        lines = thefile.readlines()
-        lenlines = len(lines)
-        thefile.close()
-    except:
-        log.stateandquit("cannot open file " + datafilename)
-        sys.exit("failure")
-
-    branches     = all_data['branches']
-    buses        = all_data['buses']
-    IDtoCountmap = all_data['IDtoCountmap']
-
-    mp_vm      = {}
-    mp_angle   = {}
-    mp_cvalues = {}
-    mp_svalues = {}
-
-    mp_Pfvalues = {}
-    mp_Ptvalues = {}
-    mp_Qfvalues = {}
-    mp_Qtvalues = {}
-    linenum = 2
-
-    log.joint(' reading file\n')
-    while linenum < lenlines:
-        thisline = lines[linenum].split()
-
-        if thisline[0] == 'bus':
-            buscount        = int(thisline[1])
-            mp_vm[buscount] = float(thisline[3])
-            #mp_cvalues[bus] = mp_vm[bus]**2
-        elif thisline[0] == 'branch':
-            branchcount     = int(thisline[1])
-            mp_Pfvalues[branchcount] = float(thisline[7])
-            mp_Ptvalues[branchcount] = float(thisline[9])
-            mp_Qfvalues[branchcount] = float(thisline[11])
-            mp_Qtvalues[branchcount] = float(thisline[13])
-            #mp_cvalues[branchcount] = float(thisline[15])
-            #mp_svalues[branchcount] = float(thisline[17])
-        linenum += 1
-
-    all_data['mp_Pfvalues'] = mp_Pfvalues
-    all_data['mp_Ptvalues'] = mp_Ptvalues
-    all_data['mp_Qfvalues'] = mp_Qfvalues
-    all_data['mp_Qtvalues'] = mp_Qtvalues
-
-    all_data['mp_vm']      = mp_vm
-    #all_data['mp_cvalues'] = mp_cvalues
-    #all_data['mp_svalues'] = mp_svalues
-    
-
-def getsol(log,all_data):
-    casefilename = all_data['casefilename']
-    casename = casefilename.split('/')[2].split('.')[0]
-    filename = 'mp_sols/solution_va_'+ casename +'.txt'
-    
-    log.joint(" reading file matpower solution volt magnitudes and angles " + filename + "\n")
-
-    try:
-        f = open(filename, "r")
-        lines = f.readlines()
-        f.close()
-    except:
-        log.stateandquit("cannot open file", filename)
-        sys.exit("failure")
-
-    lenlines    = len(lines)
-
-    mp_vm       = {}
-    mp_angle    = {}
-    
-    buses                  = all_data['buses']
-    IDtoCountmap           = all_data['IDtoCountmap']
-
-    linenum  = 1
-
-    while linenum < lenlines:
-        thisline = lines[linenum].split(',')
-        bus_id   = int(thisline[0])
-        buscount = IDtoCountmap[bus_id]
-        bus      = buses[buscount]
-
-        mp_vm[buscount]        = float(thisline[1])
-        mp_angle[buscount]     = float(thisline[2]) * math.pi / 180
-
-        log.joint('bus ' + str(bus_id) + ' v ' + str(mp_vm[buscount]) + ' angle ' + str(mp_angle[buscount]) + '\n')
-
-        linenum += 1
-    
-    all_data['mp_vm']    = mp_vm
-    all_data['mp_angle'] = mp_angle
-
 def gosocp2(log,all_data):
 
     log.joint(' creating ampl object ...\n')
@@ -510,3 +411,103 @@ def gosocp2(log,all_data):
     thefilelp.close()
 
     log.joint(' done writing knitro solution to file\n')
+
+
+def getsol_knitro(log,all_data):
+
+    casefilename = all_data['casefilename']
+    casename = casefilename.split('/')[2].split('.')[0]
+    #filename = 'knitro_sols/'+ casename +'.txt'
+    filename = 'ksol_'+ casename +'.txt'
+    try:
+        thefile = open(filename, "r")
+        lines = thefile.readlines()
+        lenlines = len(lines)
+        thefile.close()
+    except:
+        log.stateandquit("cannot open file " + datafilename)
+        sys.exit("failure")
+
+    branches     = all_data['branches']
+    buses        = all_data['buses']
+    IDtoCountmap = all_data['IDtoCountmap']
+
+    mp_vm      = {}
+    mp_angle   = {}
+    mp_cvalues = {}
+    mp_svalues = {}
+
+    mp_Pfvalues = {}
+    mp_Ptvalues = {}
+    mp_Qfvalues = {}
+    mp_Qtvalues = {}
+    linenum = 2
+
+    log.joint(' reading file\n')
+    while linenum < lenlines:
+        thisline = lines[linenum].split()
+
+        if thisline[0] == 'bus':
+            buscount        = int(thisline[1])
+            mp_vm[buscount] = float(thisline[3])
+            #mp_cvalues[bus] = mp_vm[bus]**2
+        elif thisline[0] == 'branch':
+            branchcount     = int(thisline[1])
+            mp_Pfvalues[branchcount] = float(thisline[7])
+            mp_Ptvalues[branchcount] = float(thisline[9])
+            mp_Qfvalues[branchcount] = float(thisline[11])
+            mp_Qtvalues[branchcount] = float(thisline[13])
+            #mp_cvalues[branchcount] = float(thisline[15])
+            #mp_svalues[branchcount] = float(thisline[17])
+        linenum += 1
+
+    all_data['mp_Pfvalues'] = mp_Pfvalues
+    all_data['mp_Ptvalues'] = mp_Ptvalues
+    all_data['mp_Qfvalues'] = mp_Qfvalues
+    all_data['mp_Qtvalues'] = mp_Qtvalues
+
+    all_data['mp_vm']      = mp_vm
+    #all_data['mp_cvalues'] = mp_cvalues
+    #all_data['mp_svalues'] = mp_svalues
+    
+
+def getsol(log,all_data):
+    casefilename = all_data['casefilename']
+    casename = casefilename.split('/')[2].split('.')[0]
+    filename = 'mp_sols/solution_va_'+ casename +'.txt'
+    
+    log.joint(" reading file matpower solution volt magnitudes and angles " + filename + "\n")
+
+    try:
+        f = open(filename, "r")
+        lines = f.readlines()
+        f.close()
+    except:
+        log.stateandquit("cannot open file", filename)
+        sys.exit("failure")
+
+    lenlines    = len(lines)
+
+    mp_vm       = {}
+    mp_angle    = {}
+    
+    buses                  = all_data['buses']
+    IDtoCountmap           = all_data['IDtoCountmap']
+
+    linenum  = 1
+
+    while linenum < lenlines:
+        thisline = lines[linenum].split(',')
+        bus_id   = int(thisline[0])
+        buscount = IDtoCountmap[bus_id]
+        bus      = buses[buscount]
+
+        mp_vm[buscount]        = float(thisline[1])
+        mp_angle[buscount]     = float(thisline[2]) * math.pi / 180
+
+        log.joint('bus ' + str(bus_id) + ' v ' + str(mp_vm[buscount]) + ' angle ' + str(mp_angle[buscount]) + '\n')
+
+        linenum += 1
+    
+    all_data['mp_vm']    = mp_vm
+    all_data['mp_angle'] = mp_angle
