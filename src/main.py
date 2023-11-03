@@ -2,10 +2,8 @@
 import sys
 import os
 import numpy as np
-import subprocess
 import time
 import reader
-import pglibreader
 from myutils import breakexit
 from versioner import *
 from log import danoLogger
@@ -78,7 +76,7 @@ def read_config(log, filename):
     all_data                      = {}
     all_data['casefilename']      = casefilename
     all_data['casename']          = casefilename.split('data/')[1].split('.m')[0]
-    all_data['modfile']           = modfile
+    all_data['modfile']           = modfile.split('../modfiles/')[1]
     all_data['lpfilename']        = lpfilename
     all_data['solver']            = solver
     all_data['initial_point']     = initial_point
@@ -105,9 +103,12 @@ if __name__ == '__main__':
 
     all_data       = read_config(log,sys.argv[1])
     all_data['T0'] = T0
+
+    if all_data['modfile'] != 'ac.mod':
+        log.joint('Wrong modfile, please change config file\n')
+        sys.exit(0)
     
-    readcode       = pglibreader.readcase(log,all_data,all_data['casefilename'])
-    #readcode       = reader.readcase(log,all_data,all_data['casefilename'])
+    readcode       = reader.readcase(log,all_data,all_data['casefilename'])
 
     goac(log,all_data)    
 

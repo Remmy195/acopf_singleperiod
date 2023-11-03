@@ -20,39 +20,37 @@ def goac(log,all_data):
     log.joint(" reading modfile ...\n")
     
     t0 = time.time()
-    ampl.read(modfile)
+    ampl.read('../modfiles/'+modfile)
     t1 = time.time()
     log.joint(" modfile read in time " + str(t1-t0))
 
-    
     ampl.eval("option display_precision 0;")
     ampl.eval("option expand_precision 0;")
-    ampl.setOption('solver',solver)    
-    ampl.setOption('presolve',0)
+    ampl.setOption('solver',solver)
+    
+    if True:
+        ampl.setOption('presolve',0)
+        log.joint(' AMPL presolve off\n')
+        
     log.joint(" solver set to " + solver + "\n")
     
     if all_data['solver'] == 'gurobi_ampl':
         ampl.eval("options option gurobi_options 'method=2';")
         ampl.eval("options option gurobi_options 'bar=1';")
 
-    #if all_data['solver'] == 'knitroampl':
-    #    ampl.eval("option knitro_options 'opttol=1e-6 feastol=1e-6 bar_feasible=3';")
-    if all_data['solver'] == 'knitroampl' and all_data['knitropresolveoff']:
-        ampl.eval("option knitro_options 'presolve=0';")
-
     if all_data['solver'] == 'knitroampl':
         if all_data['mytol']:
-            ampl.eval("option knitro_options 'feastol_abs=1e-6 opttol_abs=1e-6 blasoptionlib=1 numthreads=20 linsolver=7';")
+            ampl.eval("option knitro_options 'feastol_abs=1e-6 opttol_abs=1e-6 blasoptionlib=1 numthreads=20 linsolver=7 maxtime_real=1000';")
+        elif all_data['multistart']:
+            ampl.eval("option knitro_options 'ms_enable=1 ms_numthreads=10 ms_maxsolves=5 ms_terminate =1';")
+        elif all_data['knitropresolveoff']:
+            ampl.eval("option knitro_options 'presolve=0';")            
         else:
-            ampl.eval("option knitro_options 'blasoptionlib=1 numthreads=20 linsolver=7 maxtime_real=1000';") #try linsolver_numthreads=1 and choose linear solver... #number of threads?';")
-        
-    if all_data['solver'] == 'knitroampl' and all_data['multistart']:
-        ampl.eval("option knitro_options 'ms_enable=1 ms_numthreads=10 ms_maxsolves=5 ms_terminate =1';")
-        
+            ampl.eval("option knitro_options 'blasoptionlib=1 numthreads=20 linsolver=7 maxtime_real=1000';") 
+                
 
     if all_data['fix'] or all_data['initial_point']:
         getsol(log,all_data)
-        #getsol_knitro(log,all_data)
         tolerance = 1e-05
         log.joint(' fixing tolerance to ' + str(tolerance) + '\n')
         mp_vm    = all_data['mp_vm']
@@ -196,11 +194,6 @@ def goac(log,all_data):
         bus_f[branchcount]     = branch.id_f
         bus_t[branchcount]     = branch.id_t
 
-        #if (branch.ratio != 0 and branch.ratio != 1) and (branch.angle_rad != 0): #or 
-        #    log.joint(' branch ' + str(branchcount) + ' f ' + str(branch.f) + ' t ' + str(branch.t) + ' has a tr\n')
-        #    log.joint(' ratio ' + str(branch.ratio) + ' phase shift angle ' + str(branch.angle_rad) + '\n')
-        #    breakexit('check tr')
-
             
     ampl.getSet('branches').setValues(list(branches))
     ampl.get_parameter('Gtt').setValues(Gtt)
@@ -324,7 +317,7 @@ def goac(log,all_data):
     log.joint(" solver runtime " + str(t1-t0) + '\n')
     log.joint(" time so far " + str(timesofar) + '\n')
     
-    log.joint(" writing casename, modfile, obj and runtime to summary_ac.log")
+    log.joint(" writing casename, modfile, obj and runtime to summary_ac.log\n")
 
     summary_ac = open("summary_ac.log","a+") #later add feasibility errors, etc
 
@@ -335,72 +328,73 @@ def goac(log,all_data):
 
     log.joint(" ------------------------\n")
 
-    topfg_name = 'top_flows_gens/' + all_data['casename'] + '_fg.txt' 
-    topfg      = open(topfg_name,"w")
-    
-    topflows_f = sorted(dic_Pf.items(), key = lambda x: math.fabs(x[1]), reverse = True)[:10]
-    topflows_g = sorted(dic_Pt.items(), key = lambda x: math.fabs(x[1]), reverse = True)[:10]
-    topflows   = {}
+    if False:
+        topfg_name = 'top_flows_gens/' + all_data['casename'] + '_fg.txt' 
+        topfg      = open(topfg_name,"w")
 
-    branchid_f   = int(topflows_f[0][0])
-    flow_f       = topflows_f[0][1]
-    branchid_t   = int(topflows_g[0][0])
-    flow_t       = topflows_g[0][1]
-    i_f          = 0
-    i_t          = 0
-    
-    while True:
-        if math.fabs(flow_f) >= math.fabs(flow_t):
-            topflows[branchid_f] = flow_f
-            if i_f == 9:
-                break
-            i_f         += 1
-            branchid_f   = int(topflows_f[i_f][0])
-            flow_f       = topflows_f[i_f][1]
-        else:
-            topflows[branchid_t] = flow_t
-            if i_t == 9:
-                break
-            i_t         += 1
-            branchid_t   = int(topflows_g[i_t][0])
-            flow_t       = topflows_g[i_t][1]
+        topflows_f = sorted(dic_Pf.items(), key = lambda x: math.fabs(x[1]), reverse = True)[:10]
+        topflows_g = sorted(dic_Pt.items(), key = lambda x: math.fabs(x[1]), reverse = True)[:10]
+        topflows   = {}
 
-            
-    log.joint(' top 10 flows are:\n')
-    topfg.write(' top 10 flows are:\n')
-    
-    for branchid in topflows.keys():
-        f          = all_data['branches'][branchid].f
-        t          = all_data['branches'][branchid].t
-        count_of_f = IDtoCountmap[f]
-        count_of_t = IDtoCountmap[t]
-        bus_f      = all_data['buses'][count_of_f]
-        bus_t      = all_data['buses'][count_of_t]
-        
-        log.joint(' branch ' + str(branchid) + ' f ' + str(f) + ' t ' + str(t) + ' flow ' + str(topflows[branchid]) + ' fdegree ' + str(bus_f.degree) + ' tdegree ' + str(bus_t.degree) + '\n')
-        topfg.write(' branch ' + str(branchid) + ' f ' + str(f) + ' t ' + str(t) + ' flow ' + str(topflows[branchid]) + ' fdegree ' + str(bus_f.degree) + ' tdegree ' + str(bus_t.degree) + '\n')
-        
-    top_active_gens  = dict(sorted(dic_Pg.items(), key = lambda x: x[1], reverse = True)[:10]) 
+        branchid_f   = int(topflows_f[0][0])
+        flow_f       = topflows_f[0][1]
+        branchid_t   = int(topflows_g[0][0])
+        flow_t       = topflows_g[0][1]
+        i_f          = 0
+        i_t          = 0
 
-    log.joint(' top 10 active power gens are:\n')
-    topfg.write(' top 10 active power gens are:\n')
-    
-    for genid in top_active_gens.keys():
-        log.joint(' genid ' + str(int(genid)) + ' at bus ' + str(gens[genid]) + ' active power generation ' + str(top_active_gens[genid]) + '\n')
-        topfg.write(' genid ' + str(int(genid)) + ' at bus ' + str(gens[genid]) + ' active power generation ' + str(top_active_gens[genid]) + '\n')
+        while True:
+            if math.fabs(flow_f) >= math.fabs(flow_t):
+                topflows[branchid_f] = flow_f
+                if i_f == 9:
+                    break
+                i_f         += 1
+                branchid_f   = int(topflows_f[i_f][0])
+                flow_f       = topflows_f[i_f][1]
+            else:
+                topflows[branchid_t] = flow_t
+                if i_t == 9:
+                    break
+                i_t         += 1
+                branchid_t   = int(topflows_g[i_t][0])
+                flow_t       = topflows_g[i_t][1]
 
-    top_reactive_gens  = dict(sorted(dic_Qg.items(), key = lambda x: x[1], reverse = True)[:10]) 
 
-    log.joint(' top 10 reactive power gens are:\n')
-    topfg.write(' top 10 reactive power gens are:\n')
-    
-    for genid in top_reactive_gens.keys():
-        log.joint(' genid ' + str(int(genid)) + ' at bus ' + str(gens[genid]) + ' active power generation ' + str(top_reactive_gens[genid]) + '\n')
-        topfg.write(' genid ' + str(int(genid)) + ' at bus ' + str(gens[genid]) + ' active power generation ' + str(top_reactive_gens[genid]) + '\n')
+        log.joint(' top 10 flows are:\n')
+        topfg.write(' top 10 flows are:\n')
 
-    topfg.close()
+        for branchid in topflows.keys():
+            f          = all_data['branches'][branchid].f
+            t          = all_data['branches'][branchid].t
+            count_of_f = IDtoCountmap[f]
+            count_of_t = IDtoCountmap[t]
+            bus_f      = all_data['buses'][count_of_f]
+            bus_t      = all_data['buses'][count_of_t]
 
-    log.joint(" ------------------------\n")
+            log.joint(' branch ' + str(branchid) + ' f ' + str(f) + ' t ' + str(t) + ' flow ' + str(topflows[branchid]) + ' fdegree ' + str(bus_f.degree) + ' tdegree ' + str(bus_t.degree) + '\n')
+            topfg.write(' branch ' + str(branchid) + ' f ' + str(f) + ' t ' + str(t) + ' flow ' + str(topflows[branchid]) + ' fdegree ' + str(bus_f.degree) + ' tdegree ' + str(bus_t.degree) + '\n')
+
+        top_active_gens  = dict(sorted(dic_Pg.items(), key = lambda x: x[1], reverse = True)[:10]) 
+
+        log.joint(' top 10 active power gens are:\n')
+        topfg.write(' top 10 active power gens are:\n')
+
+        for genid in top_active_gens.keys():
+            log.joint(' genid ' + str(int(genid)) + ' at bus ' + str(gens[genid]) + ' active power generation ' + str(top_active_gens[genid]) + '\n')
+            topfg.write(' genid ' + str(int(genid)) + ' at bus ' + str(gens[genid]) + ' active power generation ' + str(top_active_gens[genid]) + '\n')
+
+        top_reactive_gens  = dict(sorted(dic_Qg.items(), key = lambda x: x[1], reverse = True)[:10]) 
+
+        log.joint(' top 10 reactive power gens are:\n')
+        topfg.write(' top 10 reactive power gens are:\n')
+
+        for genid in top_reactive_gens.keys():
+            log.joint(' genid ' + str(int(genid)) + ' at bus ' + str(gens[genid]) + ' active power generation ' + str(top_reactive_gens[genid]) + '\n')
+            topfg.write(' genid ' + str(int(genid)) + ' at bus ' + str(gens[genid]) + ' active power generation ' + str(top_reactive_gens[genid]) + '\n')
+
+        topfg.close()
+
+        log.joint(" ------------------------\n")
     
     #breakexit("write solution?")
 
@@ -409,8 +403,10 @@ def goac(log,all_data):
     IDtoCountmap  = all_data['IDtoCountmap']
     tolerance     = 1e-05
     
-    filename      = 'sols/ksol_' + all_data['casename'] + '.txt'
-    filenamelp    = 'sols/ksol_' + all_data['casename'] + '.lp'
+    filename      = 'ksol_' + all_data['casename'] + '.txt'
+    filenamelp    = 'ksol_' + all_data['casename'] + '.lp'
+    #filename      = 'sols/ksol_' + all_data['casename'] + '.txt'
+    #filenamelp    = 'sols/ksol_' + all_data['casename'] + '.lp'    
     thefile       = open(filename,'w+')
     thefilelp     = open(filenamelp,'w+')
     
@@ -459,7 +455,6 @@ def goac(log,all_data):
         thefilelp.write(linelp_Qt)
         
 
-
     thefile.close()
     thefilelp.close()
 
@@ -467,9 +462,9 @@ def goac(log,all_data):
 
 def getsol_knitro(log,all_data):
 
-    casefilename  = all_data['casefilename'] 
-    #filename      = 'ksol_' + casefilename.split('data/')[1].split('.m')[0] + '.txt'
-    filename      = casefilename.split('data/')[1].split('.m')[0] + '.out'
+    casefilename  = all_data['casename'] 
+    #filename      = 'ksol_' + casename + '.txt'
+    filename      = 'ksol_' + casename + '.txt'
     print(filename)
     
     try:
@@ -493,10 +488,6 @@ def getsol_knitro(log,all_data):
     mp_Ptvalues = {}
     mp_Qfvalues = {}
     mp_Qtvalues = {}
-
-    #for bus in buses_data.values():
-    #    log.joint(' bus ' + str(bus) + ' buscount ' + str(bus.count) + ' busid ' + str(bus.nodeID) + '\n')
-    #    breakexit('c')
 
     linenum  = 2
 
@@ -528,8 +519,8 @@ def getsol_knitro(log,all_data):
 
 
 def getsol(log,all_data):
-    casefilename = all_data['casefilename']
-    casename = casefilename.split('/')[2].split('.')[0]
+    
+    casename = all_data['casename']
     filename = 'mp_sols/solution_va_'+ casename +'.txt'
     
     log.joint(" reading file matpower solution volt magnitudes and angles " + filename + "\n")

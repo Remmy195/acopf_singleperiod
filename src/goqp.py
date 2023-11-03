@@ -20,42 +20,36 @@ def goqp(log,all_data):
     log.joint(" reading modfile ...\n")
     
     t0 = time.time()
-    ampl.read(modfile)
+    ampl.read('../modfiles/' + modfile)
     t1 = time.time()
     log.joint(" modfile read in time " + str(t1-t0))
 
-    
     ampl.eval("option display_precision 0;")
     ampl.eval("option expand_precision 0;")
     ampl.setOption('solver',solver)    
-    ampl.setOption('presolve',0)
+
+    if True:
+        ampl.setOption('presolve',0)
+        log.joint(' AMPL presolve off\n')
+
     log.joint(" solver set to " + solver + "\n")
     ampl.eval("option show_stats 2;")
-    #ampl.eval("option presolve_eps=1e-5;")
 
     if all_data['solver'] == 'gurobi_ampl':
-        ampl.eval("option gurobi_options 'method=2 barhomogeneous=1 numericfocus=1 barconvtol=1e-6 outlev=1 iisfind=1 writemodel=jabr.lp resultfile=jabr.ilp';")
+        ampl.eval("option gurobi_options 'method=2 crossover=0 barhomogeneous=1 numericfocus=1 barconvtol=1e-6 outlev=1 iisfind=1 writemodel=jabr.lp resultfile=jabr.ilp';")
 
     if all_data['solver'] == 'knitroampl':
         if all_data['mytol']:
-            ampl.eval("option knitro_options 'convex=1 feastol_abs=1e-6 opttol_abs=1e-6 blasoptionlib=1 numthreads=20 linsolver=7';")
+            ampl.eval("option knitro_options 'feastol_abs=1e-6 opttol_abs=1e-6 blasoptionlib=1 numthreads=20 linsolver=7';")
+        elif all_data['multistart']:
+            ampl.eval("option knitro_options 'ms_enable=1 ms_numthreads=10 ms_maxsolves=5 ms_terminate =1';")
+        elif all_data['knitropresolveoff']:
+            ampl.eval("option knitro_options 'presolve=0';")       
         else:
-            ampl.eval("option knitro_options 'convex=1 blasoptionlib=1 numthreads=20 linsolver=7 maxtime_real=1000';") #try linsolver_numthreads=1 and choose linear solver... #number of threads?';")
+            ampl.eval("option knitro_options 'blasoptionlib=1 numthreads=20 linsolver=7 maxtime_real=1000';") 
 
-    #bar_conic_enable=1 --> too slow for some problems ...
-    # bar_refinement=1
-    
-    #if all_data['solver'] == 'knitroampl' and all_data['knitropresolveoff']:
-    #    ampl.eval("option knitro_options 'presolve=0';")
-        
-    #if all_data['solver'] == 'knitroampl' and all_data['conic']:
-    #    ampl.eval("option knitro_options 'bar_conic_enable=1';")
-
-    #if all_data['solver'] == 'knitroampl' and all_data['conic'] and all_data['knitropresolveoff']:
-    #    ampl.eval("option knitro_options 'bar_conic_enable=1 presolve=0';")        
-    #if all_data['solver'] == 'knitroampl' and all_data['multistart']:
-    #    ampl.eval("option knitro_options 'ms_enable=1 ms_numthreads=10 ms_maxsolves=3 ms_terminate =1';")
-
+            
+    #bar_refinement=1            
 
     if all_data['fix_point']:
         getsol_knitro(log,all_data)
@@ -280,7 +274,7 @@ def goqp(log,all_data):
 
     log.joint(" saving processed data to all_data\n")
     
-    expand = True
+    expand = False
     if expand:
         time1 = time.time()
         filename = 'basemodel.out'
@@ -452,7 +446,7 @@ def add_cuts(log,all_data):
     else:
         original_casename = all_data['casename']
 
-    filename = 'cuts/cuts_' + original_casename + '.txt' 
+    filename = '../cuts/cuts_' + original_casename + '.txt' 
     log.joint(" opening file with cuts " + filename + "\n")
 
     try:
@@ -462,10 +456,14 @@ def add_cuts(log,all_data):
         log.stateandquit(" cannot open file", filename)
         sys.exit("failure")
 
-    numlines  = len(lines)
-    theround  = lines[0].split()[3]
-    firstline = lines[1].split()
-    jabr      = 1
+    numlines    = len(lines)
+    theround    = lines[0].split()[3]
+    firstline   = lines[1].split()
+    jabr        = 1
+
+    numjabrcuts = 0
+    numi2cuts   = 0
+    numlimcuts  = 0
 
     if firstline[0] == '#Jabr-envelope':
         numjabrcuts = int(firstline[3])
@@ -681,7 +679,7 @@ def add_cuts(log,all_data):
         log.joint(' potential bug\n')
                 
     if (num_limf + num_limt) != numlimcuts:
-        log.joint(' num lim-cuts .txt file ' + str(numlimcuts) + ' num i2-cuts added ' + str((num_limf + num_limt)) + '\n')
+        log.joint(' num lim-cuts .txt file ' + str(numlimcuts) + ' num limit-cuts added ' + str((num_limf + num_limt)) + '\n')
         log.joint(' potential bug\n')
             
     all_data['jabr_cuts']      = jabr_cuts
