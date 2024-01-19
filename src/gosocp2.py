@@ -36,12 +36,14 @@ def gosocp2(log,all_data):
     log.joint(" solver set to " + solver + "\n")
     ampl.eval("option show_stats 2;")
 
+    
     if all_data['solver'] == 'gurobi_ampl':
-        ampl.eval("option gurobi_options 'method=2 barhomogeneous=1 numericfocus=1 barconvtol=1e-6 outlev=1 iisfind=1 writemodel=jabr.lp resultfile=jabr.ilp';")
+        ampl.eval("option gurobi_options 'method=2 barhomogeneous=1 numericfocus=1 barconvtol=1e-6 outlev=1 TimeLimit=1000';")
+        #ampl.eval("option gurobi_options 'method=2 barhomogeneous=1 numericfocus=1 barconvtol=1e-6 outlev=1 iisfind=1 writemodel=jabr.lp resultfile=jabr.ilp';")
 
     if all_data['solver'] == 'knitroampl':
         if all_data['mytol']:
-            ampl.eval("option knitro_options 'feastol_abs=1e-6 opttol_abs=1e-6 blasoptionlib=1 numthreads=20 linsolver=7';")
+            ampl.eval("option knitro_options 'feastol_abs=1e-6 opttol_abs=1e-6 blasoptionlib=1 numthreads=20 linsolver=5 honorbnds=1 maxtime_real=1000 convex=1';") #bar_conic_enable=1
         elif all_data['multistart']:
             ampl.eval("option knitro_options 'ms_enable=1 ms_numthreads=10 ms_maxsolves=5 ms_terminate =1';")
         elif all_data['knitropresolveoff']:
@@ -49,12 +51,9 @@ def gosocp2(log,all_data):
         else:
             ampl.eval("option knitro_options 'blasoptionlib=1 numthreads=20 linsolver=7 maxtime_real=1000';") 
 
-            
-    #bar_conic_enable=1 --> too slow for some problems ...
-    #bar_refinement=1
-            
-    #if all_data['solver'] == 'knitroampl' and all_data['conic']:
-    #    ampl.eval("option knitro_options 'bar_conic_enable=1';")
+    if all_data['solver'] == 'mosek':
+        ampl.eval("option mosek_options 'outlev=1 sol:chk:feastol=1e-08 chk:mode=2';")
+        #cvt:socp=0                 
 
 
     if all_data['fix_point']:
@@ -135,20 +134,27 @@ def gosocp2(log,all_data):
         bus_gens_set[bus.count].setValues(bus_gens[bus.count])
     
     #branches
-    branches = {}
-    U = {}
-    Gtt = {}
-    Btt = {}
-    Gff = {}
-    Bff = {}
-    Gtf = {}
-    Btf = {}
-    Gft = {}
-    Bft = {}
-    bus_f = {}
-    bus_t = {}
-    CSmax = {}
+    branches  = {}
+    U         = {}
+    Gtt       = {}
+    Btt       = {}
+    Gff       = {}
+    Bff       = {}
+    Gtf       = {}
+    Btf       = {}
+    Gft       = {}
+    Bft       = {}
+    bus_f     = {}
+    bus_t     = {}
+    CSmax     = {}
+    c_ubound  = {}
+    c_lbound  = {}
+    s_ubound  = {}
+    s_lbound  = {}
+    Cinit     = {}
+    Sinit     = {}
 
+    
     i2max       = {}
     g           = {}
     b           = {}
@@ -159,6 +165,11 @@ def gosocp2(log,all_data):
     counter = 0 
     for branch in all_data['branches'].values():
         branchcount = branch.count
+        if branch.status != 1: #the reader does not consider branches whose status is 0, hence this should never be true
+            log.joint(' branch ' + str(branchcount) + ' off, we skip it\n')
+            breakexit('check')
+            continue
+        
         branches[branchcount] = (branch.id_f,branch.id_t)
         U[branchcount] = branch.limit
         Gtt[branchcount] = branch.Gtt
@@ -180,7 +191,99 @@ def gosocp2(log,all_data):
         bshunt[branchcount]      = branch.bc
         ratio[branchcount]       = branch.ratio
         phase_angle[branchcount] = branch.angle_rad
+
+        Cinit[branchcount] = 1
+        Sinit[branchcount] = 0
+
+        # cs bounds
+        # Assumption: zero angle difference is always allowed
+        maxprod     = Vmax[branch.id_f] * Vmax[branch.id_t]
+        minprod     = Vmin[branch.id_f] * Vmin[branch.id_t]
+
+        ubound      = maxprod
+        lbound      = -maxprod
+        maxanglerad = branch.maxangle_rad
+        minanglerad = branch.minangle_rad
         
+        # Cosine
+        if maxanglerad <= 0.5*math.pi:
+            # In this case minangle <= 0                                              
+            if minanglerad >= -0.5*math.pi:
+                lbound = minprod*min(math.cos(maxanglerad), math.cos(minanglerad))
+            elif minanglerad >= -math.pi:
+                lbound = maxprod*math.cos(minangle_rad)  # Which is negative          
+            elif minanglerad >= -1.5*math.pi:
+                lbound = -maxprod
+            else:
+                lbound = -maxprod
+                
+        elif maxanglerad <= math.pi:
+            if minanglerad >= -0.5*math.pi:
+                lbound = maxprod*math.cos(maxanglerad)
+            elif minanglerad >= -math.pi:
+                lbound = maxprod*min(math.cos(maxanglerad), math.cos(minanglerad))
+            elif minanglerad >= -1.5*math.pi:
+                lbound = -maxprod
+            else:
+                lbound = -maxprod
+
+        elif maxanglerad <= 1.5*math.pi:
+            lbound = -maxprod    
+
+        elif maxanglerad <= 2*math.pi:
+            lbound = -maxprod
+
+        else:
+            ubound = maxprod
+            lbound = -maxprod
+
+        c_ubound[branchcount] = ubound
+        c_lbound[branchcount] = lbound
+        
+        # Sine                                                                         
+        if maxanglerad <= math.pi/2:
+            ubound = maxprod*math.sin(maxanglerad)
+
+            if  minanglerad >= -0.5*math.pi:
+                lbound = maxprod*math.sin(minanglerad)
+            elif  minanglerad >= -math.pi:
+                lbound = -maxprod
+            elif  minanglerad >= -1.5*math.pi:
+                ubound = maxprod*max( math.sin(maxanglerad), math.sin(minanglerad))
+                lbound = -maxprod
+            else:
+                ubound = maxprod
+                lbound = -maxprod
+
+        elif maxanglerad <= math.pi:
+            ubound = maxprod
+
+            if minanglerad >= -0.5*math.pi:
+                lbound = maxprod*math.sin(minanglerad)
+            elif minanglerad >= -math.pi:
+                lbound = -maxprod
+            elif minanglerad >= -1.5*math.pi:
+                lbound = -maxprod
+            else:
+                lbound = -maxprod
+
+        elif maxanglerad <= 1.5*math.pi:
+            ubound = maxprod
+
+            if minanglerad >= -0.5*math.pi:
+                lbound = maxprod*min(math.sin(maxanglerad), math.sin(minanglerad))
+            elif minanglerad >= -math.pi:
+                lbound = -maxprod
+            elif minanglerad >= -1.5*math.pi:
+                lbound = -maxprod
+            else:
+                lbound = -maxprod
+        else:
+            ubound = maxprod
+            lbound = -maxprod
+
+        s_ubound[branchcount] = ubound
+        s_lbound[branchcount] = lbound
 
 
     ampl.getSet('branches').setValues(list(branches))
@@ -196,7 +299,13 @@ def gosocp2(log,all_data):
     ampl.get_parameter('bus_f').setValues(bus_f)
     ampl.get_parameter('bus_t').setValues(bus_t)
     ampl.get_parameter('CSmax').setValues(CSmax)
-
+    ampl.get_parameter('Cinit').setValues(Cinit)
+    ampl.get_parameter('Sinit').setValues(Sinit)
+    ampl.get_parameter('c_ubound').setValues(c_ubound)
+    ampl.get_parameter('c_lbound').setValues(c_lbound)
+    ampl.get_parameter('s_ubound').setValues(s_ubound)
+    ampl.get_parameter('s_lbound').setValues(s_lbound)
+    
     ampl.get_parameter('i2max').setValues(i2max)    
     ampl.get_parameter('g').setValues(g) 
     ampl.get_parameter('b').setValues(b)
@@ -255,7 +364,7 @@ def gosocp2(log,all_data):
 
     log.joint(" saving processed data to all_data\n")
     
-    expand = False
+    expand = True
     if expand:
         time1 = time.time()
         filename = 'basemodel.out'
@@ -286,15 +395,17 @@ def gosocp2(log,all_data):
     Pf = ampl.get_variable("Pf")
     Pt = ampl.get_variable("Pt")
     Pg = ampl.get_variable("Pg")
+    Qg = ampl.get_variable("Qg")    
     Qf = ampl.get_variable("Qf")
     Qt = ampl.get_variable("Qt")
-    if all_data['modfile'] == 'jabr_i2.mod':
+    if all_data['modfile'] == 'i2.mod':
         i2f    = ampl.get_variable("i2f")
         dic_i2f = i2f.get_values().to_dict()
     dic_v = v.get_values().to_dict()
     dic_c = c.get_values().to_dict()
     dic_s = s.get_values().to_dict()
     dic_Pg = Pg.get_values().to_dict()
+    dic_Qg = Qg.get_values().to_dict()
     dic_Pf = Pf.get_values().to_dict()
     dic_Pt = Pt.get_values().to_dict()
     dic_Qf = Qf.get_values().to_dict()
@@ -330,7 +441,7 @@ def gosocp2(log,all_data):
     
     log.joint(" ------------------------\n")
     
-    breakexit("write down solution?")
+    #breakexit("write down solution?")
     
     branches_data = all_data['branches']
     buses_data    = all_data['buses']
@@ -376,7 +487,7 @@ def gosocp2(log,all_data):
         cftval     = dic_c[branchid]
         sftval     = dic_s[branchid]
 
-        if all_data['modfile'] == 'jabr_i2.mod':
+        if all_data['modfile'] == 'i2.mod':
             i2fval = dic_i2f[branchid]
             line   = 'branch ' + str(branchid) + ' f ' + str(f) + ' t ' + str(t) + ' Pft ' + str(Pfval) + ' Ptf ' + str(Ptval) + ' Qft ' + str(Qfval) + ' Qtf ' + str(Qtval) + ' cft ' + str(cftval) + ' sft ' + str(sftval) + ' i2ft ' + str(i2fval) + '\n'
         else:
@@ -403,10 +514,18 @@ def gosocp2(log,all_data):
 
         thefilelp.write(linelp_sft)
 
-        if all_data['modfile'] == 'jabr_i2.mod':
+        if all_data['modfile'] == 'i2.mod':
             linelp_i2f = str(i2fval-tolerance) + ' <= i2_' + str(branchid) + '_' + str(f) + '_' + str(t) + ' <= ' + str(i2fval+tolerance) + '\n' 
 
             thefilelp.write(linelp_i2f)
+
+    thefile.write('generation:\n')
+        
+    for genid in gens.keys():
+        gen_nodeID = gens[genid]
+        line_gen = 'genid ' + str(genid) + ' bus ' + str(gen_nodeID) + ' GP ' + str(dic_Pg[genid]) + ' GQ ' + str(dic_Qg[genid]) + '\n'
+        thefile.write(line_gen)
+
             
     thefile.close()
     thefilelp.close()

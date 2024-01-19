@@ -5,9 +5,9 @@ from log import danoLogger
 import time
 import math
 
-def gosocp(log,all_data):
+def gosocp2_mosek(log,all_data):
 
-
+    
     log.joint(' creating ampl object ...\n')
     ampl = AMPL()
 
@@ -31,13 +31,13 @@ def gosocp(log,all_data):
     if True:
         ampl.setOption('presolve',0)
         log.joint(' AMPL presolve off\n')
-
+    
     log.joint(" solver set to " + solver + "\n")
     ampl.eval("option show_stats 2;")
 
     if all_data['solver'] == 'gurobi_ampl':
-        #ampl.eval("option gurobi_options 'method=2 barhomogeneous=1 numericfocus=1 barconvtol=1e-6 outlev=1 TimeLimit=1000';")
-        ampl.eval("option gurobi_options 'method=2 barhomogeneous=1 numericfocus=1 barconvtol=1e-6 outlev=1 iisfind=1 writemodel=jabr.lp resultfile=jabr.ilp';")
+        ampl.eval("option gurobi_options 'method=2 barhomogeneous=1 numericfocus=1 barconvtol=1e-6 outlev=1 TimeLimit=1000';")
+        #ampl.eval("option gurobi_options 'method=2 barhomogeneous=1 numericfocus=1 barconvtol=1e-6 outlev=1 iisfind=1 writemodel=jabr.lp resultfile=jabr.ilp';")
 
     if all_data['solver'] == 'knitroampl':
         if all_data['mytol']:
@@ -50,63 +50,58 @@ def gosocp(log,all_data):
             ampl.eval("option knitro_options 'blasoptionlib=1 numthreads=20 linsolver=7 maxtime_real=1000';") 
 
     if all_data['solver'] == 'mosek':
-        ampl.eval("option mosek_options 'outlev=1 sol:chk:feastol=1e-08 chk:mode=2';")
-        #cvt:socp=0     
+        ampl.eval("option mosek_options 'outlev=1 threads=20 sol:chk:feastol=1e-08 chk:mode=2 writemodel=i2.ptf';")
+        #cvt:socp=0                 
+
     if all_data['fix_point']:
         getsol_knitro(log,all_data)
         tolerance = 1e-05
         log.joint(' fixing tolerance to ' + str(tolerance) + '\n')
         mp_vm    = all_data['mp_vm']
-
+	#mp_angle = all_data['mp_angle']
+        print(mp_vm)
 
     IDtoCountmap = all_data['IDtoCountmap']
         
     #buses
-    buses        = {}
-    Pd           = {}
-    Qd           = {}
-    Vmax         = {}
-    Vmin         = {}    
-    branches_f   = {}
-    branches_t   = {}
-    bus_gens     = {}
-    bus_Gs       = {}
-    bus_Bs       = {}
-    Vinit        = {}
+    buses = {}
+    Pd = {}
+    Qd = {}
+    Vmax = {}
+    Vmin = {}    
+    branches_f = {}
+    branches_t = {}
+    bus_gens = {}
+    bus_Gs = {}
+    bus_Bs = {}
+    Vinit  = {}
 
 
     for bus in all_data['buses'].values():
         buscount = bus.count
-
-        if ( len(bus.frombranchids) == 0 ) and ( len(bus.tobranchids) == 0 ): #else we could have just skipped bus.Gs and bus.Bs
-            log.joint(' flawed bus ' + str(bus.nodeID) + ' busid ' + str(buscount) + '\n') #we are not skipping it
-        #    breakexit('check')
-        #    continue
-
         buses[buscount] = bus.nodeID 
         Pd[buscount] = bus.Pd
         Qd[buscount] = bus.Qd
-        
         if all_data['fix_point']:
             log.joint(' buscount ' + str(buscount) + ' VM ' + str(mp_vm[buscount]) + '\n')
-            Vmin[buscount] = mp_vm[buscount] - tolerance                              
+            Vmin[buscount] = mp_vm[buscount] - tolerance                                                                                          
             Vmax[buscount] = mp_vm[buscount] + tolerance
         else:
             Vmax[buscount] = bus.Vmax
             Vmin[buscount] = bus.Vmin
 
-
         Vinit[buscount]      = 1
-        
+
         branches_f[buscount] = []
         branches_t[buscount] = []
 
         bus_gens[buscount] = bus.genidsbycount #load this as a sparse ds
+
         if ( bus.Gs != 0 ) and ( ( len(bus.frombranchids) != 0 ) or ( len(bus.tobranchids) != 0 ) ):
             bus_Gs[buscount] = bus.Gs
         if ( bus.Bs != 0 ) and ( ( len(bus.frombranchids) != 0 ) or ( len(bus.tobranchids) != 0 ) ):
             bus_Bs[buscount] = bus.Bs
-
+        
         for branchid in bus.frombranchids.values():
             branches_f[buscount].append(branchid) 
             
@@ -125,17 +120,17 @@ def gosocp(log,all_data):
     ampl.get_parameter('Vmax').set_values(Vmax)
     ampl.get_parameter('Vmin').set_values(Vmin)
     ampl.get_parameter('Vinit').set_values(Vinit)
-    
+
     branches_f_set = ampl.getSet('branches_f')
     branches_t_set = ampl.getSet('branches_t')
     bus_gens_set   = ampl.getSet('bus_gens')
     
-    for bus in all_data['buses'].values(): #if REMOVING flawed buses, change this
+    for bus in all_data['buses'].values():
         branches_f_set[bus.count].setValues(branches_f[bus.count])
         branches_t_set[bus.count].setValues(branches_t[bus.count])
         bus_gens_set[bus.count].setValues(bus_gens[bus.count])
     
-    #branches 
+    #branches
     branches  = {}
     U         = {}
     Gtt       = {}
@@ -155,7 +150,16 @@ def gosocp(log,all_data):
     s_lbound  = {}
     Cinit     = {}
     Sinit     = {}
+
     
+    i2max       = {}
+    g           = {}
+    b           = {}
+    bshunt      = {}
+    ratio       = {}
+    phase_angle = {}
+    
+    counter = 0 
     for branch in all_data['branches'].values():
         branchcount = branch.count
         if branch.status != 1: #the reader does not consider branches whose status is 0, hence this should never be true
@@ -173,10 +177,17 @@ def gosocp(log,all_data):
         Btf[branchcount] = branch.Btf
         Gft[branchcount] = branch.Gft
         Bft[branchcount] = branch.Bft
-        
         CSmax[branchcount] = Vmax[branch.id_f] * Vmax[branch.id_t]
         bus_f[branchcount] = branch.id_f
         bus_t[branchcount] = branch.id_t
+
+        y                        = branch.y
+        i2max[branchcount]       = branch.limit**2 / Vmin[branch.id_f] * Vmin[branch.id_f]
+        g[branchcount]           = y.real
+        b[branchcount]           = y.imag
+        bshunt[branchcount]      = branch.bc
+        ratio[branchcount]       = branch.ratio
+        phase_angle[branchcount] = branch.angle_rad
 
         Cinit[branchcount] = 1
         Sinit[branchcount] = 0
@@ -270,7 +281,8 @@ def gosocp(log,all_data):
 
         s_ubound[branchcount] = ubound
         s_lbound[branchcount] = lbound
-    
+
+
     ampl.getSet('branches').setValues(list(branches))
     ampl.get_parameter('Gtt').setValues(Gtt)
     ampl.get_parameter('Btt').setValues(Btt)
@@ -291,8 +303,17 @@ def gosocp(log,all_data):
     ampl.get_parameter('s_ubound').setValues(s_ubound)
     ampl.get_parameter('s_lbound').setValues(s_lbound)
     
+    ampl.get_parameter('i2max').setValues(i2max)    
+    ampl.get_parameter('g').setValues(g) 
+    ampl.get_parameter('b').setValues(b)
+    ampl.get_parameter('bshunt').setValues(bshunt)    
+    ampl.get_parameter('ratio').setValues(ratio)
+    ampl.get_parameter('phase_angle').setValues(phase_angle)
+
     #gens
     gens      = {}
+    lingens   = {}
+    quadgens  = {}
     Pmax      = {}
     Pmin      = {}
     Qmax      = {}
@@ -300,6 +321,10 @@ def gosocp(log,all_data):
     fixedcost = {}
     lincost   = {}
     quadcost  = {} #we assume at most quadratic cost (for the moment)
+    alfa      = {}
+    beta      = {}
+    gamma     = {}
+    sigma     = 0
 
     for gen in all_data['gens'].values():
         gencount = gen.count #this corresponds to bus count
@@ -322,8 +347,21 @@ def gosocp(log,all_data):
         fixedcost[gencount] = gen.costvector[2] * gen.status
         lincost[gencount] = gen.costvector[1]
         quadcost[gencount] = gen.costvector[0]
-            
+        
+        if gen.costvector[0]:
+            quadgens[gencount] = gen.nodeID
+            alfa[gencount]     = math.sqrt(gen.costvector[0])            
+            beta[gencount]     = - lincost[gencount] / (2 * alfa[gencount])
+            gamma[gencount]    = fixedcost[gencount] - beta[gencount]**2
+            sigma             += gamma[gencount]
+            #log.joint(' alfa ' + str(alfa[gencount]) + ' beta ' + str(beta[gencount]) + ' gamma ' + str(gamma[gencount]) + '\n')
+        else:
+            lingens[gencount] = gen.nodeID
+
+                
     ampl.getSet('gens').setValues(list(gens))
+    ampl.getSet('quadgens').setValues(list(quadgens))
+    ampl.getSet('lingens').setValues(list(lingens))
     ampl.get_parameter('Pmax').setValues(Pmax)
     ampl.get_parameter('Pmin').setValues(Pmin)
     ampl.get_parameter('Qmax').setValues(Qmax)
@@ -331,6 +369,11 @@ def gosocp(log,all_data):
     ampl.get_parameter('fixedcost').setValues(fixedcost)
     ampl.get_parameter('lincost').setValues(lincost)
     ampl.get_parameter('quadcost').setValues(quadcost)
+    ampl.get_parameter('alfa').setValues(alfa)
+    ampl.get_parameter('beta').setValues(beta)
+    ampl.get_parameter('gamma').setValues(gamma)
+    ampl.get_parameter('sigma').set(sigma)
+
 
     log.joint(" sets and parameters loaded\n")
 
@@ -366,10 +409,13 @@ def gosocp(log,all_data):
     s = ampl.get_variable("s")
     Pf = ampl.get_variable("Pf")
     Pt = ampl.get_variable("Pt")
+    Pg = ampl.get_variable("Pg")
+    Qg = ampl.get_variable("Qg")    
     Qf = ampl.get_variable("Qf")
     Qt = ampl.get_variable("Qt")
-    Pg = ampl.get_variable("Pg")
-    Qg = ampl.get_variable("Qg")
+    if all_data['modfile'] == 'i2_mosek.mod':
+        i2f    = ampl.get_variable("i2f")
+        dic_i2f = i2f.get_values().to_dict()
     dic_v = v.get_values().to_dict()
     dic_c = c.get_values().to_dict()
     dic_s = s.get_values().to_dict()
@@ -379,6 +425,10 @@ def gosocp(log,all_data):
     dic_Pt = Pt.get_values().to_dict()
     dic_Qf = Qf.get_values().to_dict()
     dic_Qt = Qt.get_values().to_dict()
+    t_lincost  = ampl.get_variable("t_lincost")
+    #t_quadcost     = ampl.get_variable("t_quadcost")
+    #val_t_quadcost = t_quadcost.value()
+    val_t_lincost = t_lincost.value()
 
     dicPLoss = {}
     dicQLoss = {}
@@ -393,6 +443,8 @@ def gosocp(log,all_data):
     log.joint(" case " + all_data['casefilename'] + "\n")
     log.joint(" modfile " + all_data['modfile'] + "\n")
     log.joint(" objective " + str(objval) + '\n')
+    log.joint(" solver "  + all_data['solver'] + '\n')
+    #log.joint(" t^2 + sigma " + str((val_t_quadcost**2 + sigma)) + '\n')
     log.joint(" total active power generation " + str(sum(dic_Pg.values())) + '\n')
     log.joint(" total active power demand " + str(sum(Pd.values())) + '\n')
     log.joint(" total active power loss " + str(sum(dicPLoss.values())) + '\n')
@@ -414,23 +466,24 @@ def gosocp(log,all_data):
     
     branches_data = all_data['branches']
     buses_data    = all_data['buses']
+    gens_data    = all_data['gens']    
     IDtoCountmap  = all_data['IDtoCountmap']
-    tolerance     = 1e-05
+    tolerance     = 1e-05 #default 1e-5
     
-    casefilename  = all_data['casefilename']
-    filename      = 'ksol_' + all_data['modfile'] + '_' + all_data['casename'] + '.txt'
-    filenamelp    = 'ksol_' + all_data['modfile'] + '_' + all_data['casename'] + '.lp'
-    #filename      = 'sols_socp/ksol_' + all_data['modfile'] + '_' + all_data['casename'] + '.txt'
-    #filenamelp    = 'sols_socp/ksol_' + all_data['modfile'] + '_' + all_data['casename'] + '.lp'
+    casefilename  = all_data['casefilename'] 
+    filename      = 'sols_socp/ksol_' + all_data['modfile'] + '_' + all_data['casename'] + '.txt'
+    filenamelp    = 'sols_socp/ksol_' + all_data['modfile'] + '_' + all_data['casename'] + '.lp'
+    filenamevars  = 'ksol_' + all_data['modfile'] + '_' + all_data['casename'] + '.out'
     
     thefile       = open(filename,'w+')
     thefilelp     = open(filenamelp,'w+')
+    thefilevars   = open(filenamevars,'w+')
     
     log.joint(' writing solution to ' + filename + ' and to ' + filenamelp + '\n')
 
-    thefile.write('value ' + str(objval) + '\n')
+    thefile.write('value ' + str(total_cost.get().value()) + '\n')
     
-    thefile.write('voltages:\n') # add power injections?
+    thefile.write('voltages:\n')
 
     for buscount in buses.keys():
         v2val      = dic_v[buscount]
@@ -441,8 +494,26 @@ def gosocp(log,all_data):
         
         linelp_v = str(v2val - tolerance) + ' <= c_' + str(f) + '_' + str(f) + ' <= ' + str(v2val + tolerance) + '\n'
         thefilelp.write(linelp_v)
+
+        #file with vars
+
+        linevars_cff = 'c_' + str(f) + '_' + str(f) + ' = ' + str(vval) + '\n'
+        thefilevars.write(linevars_cff)
+        
+        IPvalue = - bus.Pd
+        IQvalue = - bus.Qd
+        
+        for gencounter in bus.genidsbycount:
+            if gens_data[gencounter].status:
+                IPvalue += dic_Pg[gencounter]
+                IQvalue += dic_Qg[gencounter]
+
+        linevars_IP = 'IP_' + str(bus.nodeID) + ' = ' + str(IPvalue) + '\n'
+        thefilevars.write(linevars_IP)
+        linevars_IQ = 'IQ_' + str(bus.nodeID) + ' = ' + str(IQvalue) + '\n'
+        thefilevars.write(linevars_IQ)
     
-    thefile.write('power flows and cs variables:\n')
+    thefile.write('power flows and cs:\n')
     
     for branchid in branches.keys():
 
@@ -457,8 +528,13 @@ def gosocp(log,all_data):
         Qtval      = dic_Qt[branchid]
         cftval     = dic_c[branchid]
         sftval     = dic_s[branchid]
-        
-        line = 'branch ' + str(branchid) + ' f ' + str(f) + ' t ' + str(t) + ' Pft ' + str(Pfval) + ' Ptf ' + str(Ptval) + ' Qft ' + str(Qfval) + ' Qtf ' + str(Qtval) + ' cft ' + str(cftval) + ' sft ' + str(sftval) + '\n'
+
+        if all_data['modfile'] == 'i2_mosek.mod':
+            i2fval = dic_i2f[branchid]
+            line   = 'branch ' + str(branchid) + ' f ' + str(f) + ' t ' + str(t) + ' Pft ' + str(Pfval) + ' Ptf ' + str(Ptval) + ' Qft ' + str(Qfval) + ' Qtf ' + str(Qtval) + ' cft ' + str(cftval) + ' sft ' + str(sftval) + ' i2ft ' + str(i2fval) + '\n'
+        else:
+            line = 'branch ' + str(branchid) + ' f ' + str(f) + ' t ' + str(t) + ' Pft ' + str(Pfval) + ' Ptf ' + str(Ptval) + ' Qft ' + str(Qfval) + ' Qtf ' + str(Qtval) + ' cft ' + str(cftval) + ' sft ' + str(sftval) + '\n'
+
         thefile.write(line)
 
         linelp_Pf = str(Pfval-tolerance) + ' <= P_' + str(branchid) + '_' + str(f) + '_' + str(t) + ' <= ' + str(Pfval+tolerance) + '\n'
@@ -467,31 +543,67 @@ def gosocp(log,all_data):
         thefilelp.write(linelp_Pt)
         linelp_Qf = str(Qfval-tolerance) + ' <= Q_' + str(branchid) + '_' + str(f) + '_' + str(t) + ' <= ' + str(Qfval+tolerance) + '\n'
         thefilelp.write(linelp_Qf)
+
         linelp_Qt = str(Qtval-tolerance) + ' <= Q_' + str(branchid) + '_' + str(t) + '_' + str(f) + ' <= ' + str(Qtval+tolerance) + '\n'
+
         thefilelp.write(linelp_Qt)
         
         linelp_cft = str(cftval-tolerance) + ' <= c_' + str(branchid) + '_' + str(f) + '_' + str(t) + ' <= ' + str(cftval+tolerance) + '\n'
+
         thefilelp.write(linelp_cft)
 
         linelp_sft = str(sftval-tolerance) + ' <= s_' + str(branchid) + '_' + str(f) + '_' + str(t) + ' <= ' + str(sftval+tolerance) + '\n' 
+
         thefilelp.write(linelp_sft)
 
+        if all_data['modfile'] == 'i2_mosek.mod':
+            linelp_i2f = str(i2fval-tolerance) + ' <= i2_' + str(branchid) + '_' + str(f) + '_' + str(t) + ' <= ' + str(i2fval+tolerance) + '\n' 
+
+            thefilelp.write(linelp_i2f)
+
+        ####
+
+        linevars_Pf  = 'P_' + str(branchid) + '_' + str(f) + '_' + str(t) + ' = ' + str(Pfval) + '\n'
+        thefilevars.write(linevars_Pf)
+        linevars_Pt  = 'P_' + str(branchid) + '_' + str(t) + '_' + str(f) + ' = ' + str(Ptval) + '\n'
+        thefilevars.write(linevars_Pt)
+        linevars_Qf  = 'Q_' + str(branchid) + '_' + str(f) + '_' + str(t) + ' = ' + str(Qfval) + '\n'
+        thefilevars.write(linevars_Qf)
+        linevars_Qt  = 'Q_' + str(branchid) + '_' + str(t) + '_' + str(f) + ' = ' + str(Qtval) + '\n'
+        thefilevars.write(linevars_Qt)
+        linevars_cft = 'c_' + str(branchid) + '_' + str(f) + '_' + str(t) + ' = ' + str(cftval) + '\n'
+        thefilevars.write(linevars_cft)
+        linevars_sft = 's_' + str(branchid) + '_' + str(f) + '_' + str(t) + ' = ' + str(sftval) + '\n'
+        thefilevars.write(linevars_sft)
+        linevars_i2f = 'i_' + str(branchid) + '_' + str(f) + '_' + str(t) + ' = ' + str(i2fval) + '\n'
+        thefilevars.write(linevars_i2f)
+
+            
     thefile.write('generation:\n')
         
     for genid in gens.keys():
         gen_nodeID = gens[genid]
         line_gen = 'genid ' + str(genid) + ' bus ' + str(gen_nodeID) + ' GP ' + str(dic_Pg[genid]) + ' GQ ' + str(dic_Qg[genid]) + '\n'
         thefile.write(line_gen)
-        
+
+        #new
+
+        linevars_GP = 'GP_' + str(genid) + '_' + str(gen_nodeID) + ' = ' + str(dic_Pg[genid]) + '\n'
+        thefilevars.write(linevars_GP)
+        linevars_GQ = 'GQ_' + str(genid) + '_' + str(gen_nodeID) + ' = ' + str(dic_Qg[genid]) + '\n'
+        thefilevars.write(linevars_GQ)
+
+    thefilevars.write("lincost = " + str(val_t_lincost) + "\n")
+            
     thefile.close()
     thefilelp.close()
+    thefilevars.close()
 
     log.joint(' done writing knitro solution to file\n')
 
 
 def getsol_knitro(log,all_data):
 
-    
     casename = all_data['casename']
     #filename = 'knitro_sols/'+ casename +'.txt'
     filename = 'ksol_'+ casename +'.txt'
@@ -548,10 +660,8 @@ def getsol_knitro(log,all_data):
     
 
 def getsol(log,all_data):
-
-    
-    casename = all_data['casename']
-    filename = 'solution_va_'+ casename +'.txt'
+    casename = all_data['caseename']
+    filename = 'solution_va_'+ casename +'.txt'    
     #filename = 'mp_sols/solution_va_'+ casename +'.txt'
     
     log.joint(" reading file matpower solution volt magnitudes and angles " + filename + "\n")

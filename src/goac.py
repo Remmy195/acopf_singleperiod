@@ -8,7 +8,9 @@ import math
         
 def goac(log,all_data):
 
-
+    #readcuts(log,all_data)
+    #breakexit('check')
+    
     log.joint(' creating ampl object ...\n')
     ampl = AMPL()
 
@@ -35,12 +37,11 @@ def goac(log,all_data):
     log.joint(" solver set to " + solver + "\n")
     
     if all_data['solver'] == 'gurobi_ampl':
-        ampl.eval("options option gurobi_options 'method=2';")
-        ampl.eval("options option gurobi_options 'bar=1';")
+        ampl.eval("options option gurobi_options 'method=2 bar=1 writemodel=ac.mps';")
 
     if all_data['solver'] == 'knitroampl':
         if all_data['mytol']:
-            ampl.eval("option knitro_options 'feastol_abs=1e-6 opttol_abs=1e-6 blasoptionlib=1 numthreads=20 linsolver=7 maxtime_real=1000';")
+            ampl.eval("option knitro_options 'feastol_abs=1e-6 opttol_abs=1e-6 blasoptionlib=1 numthreads=20 linsolver=7';") #maxtime_real=1000
         elif all_data['multistart']:
             ampl.eval("option knitro_options 'ms_enable=1 ms_numthreads=10 ms_maxsolves=5 ms_terminate =1';")
         elif all_data['knitropresolveoff']:
@@ -151,7 +152,7 @@ def goac(log,all_data):
 
     branches_f_set = ampl.getSet('branches_f')
     branches_t_set = ampl.getSet('branches_t')
-    bus_gens_set = ampl.getSet('bus_gens')
+    bus_gens_set   = ampl.getSet('bus_gens')
     
     for bus in all_data['buses'].values():
         branches_f_set[bus.count].setValues(branches_f[bus.count])
@@ -171,7 +172,8 @@ def goac(log,all_data):
     Bft       = {}
     bus_f     = {}
     bus_t     = {}
-
+    maxangle  = {}
+    minangle  = {}
     
     for branch in all_data['branches'].values():
         branchcount            = branch.count
@@ -193,7 +195,8 @@ def goac(log,all_data):
         Bft[branchcount]       = branch.Bft
         bus_f[branchcount]     = branch.id_f
         bus_t[branchcount]     = branch.id_t
-
+        maxangle[branchcount]  = branch.maxangle_rad
+        minangle[branchcount]  = branch.minangle_rad
             
     ampl.getSet('branches').setValues(list(branches))
     ampl.get_parameter('Gtt').setValues(Gtt)
@@ -207,6 +210,8 @@ def goac(log,all_data):
     ampl.get_parameter('U').setValues(U)
     ampl.get_parameter('bus_f').setValues(bus_f)
     ampl.get_parameter('bus_t').setValues(bus_t)
+    ampl.get_parameter('maxangle').setValues(maxangle)
+    ampl.get_parameter('minangle').setValues(minangle)
 
     
     #gens
@@ -249,13 +254,12 @@ def goac(log,all_data):
     ampl.get_parameter('fixedcost').setValues(fixedcost)
     ampl.get_parameter('lincost').setValues(lincost)
     ampl.get_parameter('quadcost').setValues(quadcost)
-
     
     log.joint(" sets and parameters loaded\n")
 
     log.joint(" saving processed data to all_data\n")
     
-    expand = False
+    expand = True
     if expand:
         time1 = time.time()
         filename = 'basemodel.out'
@@ -453,6 +457,14 @@ def goac(log,all_data):
         thefilelp.write(linelp_Qf)
         linelp_Qt = str(Qtval-tolerance) + ' <= Q_' + str(branchid) + '_' + str(t) + '_' + str(f) + ' <= ' + str(Qtval+tolerance) + '\n'
         thefilelp.write(linelp_Qt)
+
+    thefile.write('generation:\n')
+        
+    for genid in gens.keys():
+        gen_nodeID = gens[genid]
+        line_gen = 'genid ' + str(genid) + ' bus ' + str(gen_nodeID) + ' GP ' + str(dic_Pg[genid]) + ' GQ ' + str(dic_Qg[genid]) + '\n'
+        thefile.write(line_gen)
+        
         
 
     thefile.close()
@@ -553,3 +565,161 @@ def getsol(log,all_data):
     
     all_data['mp_vm']    = mp_vm
     all_data['mp_angle'] = mp_angle
+
+
+def readcuts(log,all_data):
+
+    branches     = all_data['branches']
+    buses        = all_data['buses']
+    IDtoCountmap = all_data['IDtoCountmap']
+    
+    if '_b' in all_data['casename']:
+        original_casename = all_data['casename'][:len(all_data['casename']) - 2]
+    elif ('_n_5_5' in all_data['casename'] or '_n_0_5' in all_data['casename'] 
+          or '_n_1_1' in all_data['casename']):
+        original_casename = all_data['casename'][:len(all_data['casename']) - 6]
+    elif '_line' in all_data['casename']:
+        original_casename = all_data['casename'][:len(all_data['casename']) - 5]
+    #elif '_line5' in all_data['casename']:
+    #    original_casename = all_data['casename'][:len(all_data['casename']) - 6]
+    else:
+        original_casename = all_data['casename']
+
+    filename = '../cuts/cuts_' + original_casename + '.txt' ###cuts | newcuts
+    log.joint(" opening file with cuts " + filename + "\n")
+
+    try:
+        thefile = open(filename, "r") 
+        lines = thefile.readlines()
+    except:
+        log.stateandquit(" cannot open file", filename)
+        sys.exit("failure")
+
+    numlines  = len(lines)
+    firstline = lines[1].split()
+    jabr      = 1
+    linenum   = 2
+
+    jabrs  = {}
+    i2s    = {}
+    limits = {}
+
+    while linenum < numlines: 
+        thisline = lines[linenum].split()
+        if thisline[0] == '#i2-envelope' and jabr:
+            numi2cuts = int(thisline[3])
+            all_data['addcuts_numi2cuts'] = numi2cuts
+            log.joint(' number of i2-envelope cuts = ' + str(numi2cuts) + '\n')
+            linenum += 1
+            jabr = 0
+            i2   = 1
+            continue
+
+        elif thisline[0] == '#limit-envelope' and i2:
+            numlimitcuts = int(thisline[3])
+            all_data['addcuts_numlimitcuts'] = numlimitcuts
+            log.joint(' number of limit-envelope cuts = ' + str(numlimitcuts) 
+                      + '\n')
+            linenum += 1
+            i2       = 0
+            continue
+
+        elif jabr:
+            branchid  = int(thisline[1])
+            f         = int(thisline[3])
+            t         = int(thisline[5])
+            cutid     = int(thisline[7])
+
+            if branchid not in branches.keys(): # perturbed lines
+                log.joint(' we do not add this cut since branch ' 
+                          + str(branchid) + ' f ' + str(f) + ' t ' + str(t) 
+                          + ' was turned OFF\n')
+                linenum += 1
+                continue
+
+            branch     = branches[branchid]
+            count_of_f = IDtoCountmap[f] 
+            count_of_t = IDtoCountmap[t]
+
+            if (branchid,f,t,branch.r) not in jabrs:
+                jabrs[(branchid,f,t,branch.r)] = 1
+            else:
+                jabrs[(branchid,f,t,branch.r)] += 1
+            
+            linenum += 1
+
+        elif (jabr == 0) and i2:
+
+            branchid   = int(thisline[1])
+            f          = int(thisline[3])
+            t          = int(thisline[5])
+            cutid      = int(thisline[7])
+
+            if branchid not in branches.keys(): # perturbed lines
+                log.joint(' we do not add this cut since branch ' 
+                          + str(branchid) + ' f ' + str(f) + ' t ' + str(t) 
+                          + 'was turned OFF\n')
+                linenum += 1
+                continue
+
+            branch     = branches[branchid]
+            count_of_f = IDtoCountmap[f] 
+            count_of_t = IDtoCountmap[t]
+
+            if (branchid,f,t,branch.r) not in i2s:
+                i2s[(branchid,f,t,branch.r)] = 1
+            else:
+                i2s[(branchid,f,t,branch.r)] += 1
+            
+            linenum += 1
+
+
+        elif (jabr == 0) and (i2 == 0):
+            branchid   = int(thisline[1])
+            f          = int(thisline[3])
+            t          = int(thisline[5])
+            cutid      = int(thisline[7])
+            if thisline[14] == 'Pft':
+                from_or_to = 'f'
+            elif thisline[14] == 'Ptf':
+                from_or_to = 't'
+            else:
+                log.joint(' look for a bug\n')
+                breakexit('bug')
+
+            if branchid not in branches.keys(): # perturbed lines
+                log.joint(' we do not add this cut since branch ' 
+                          + str(branchid) + ' f ' + str(f) + ' t ' + str(t) 
+                          + 'was turned OFF\n')
+                linenum += 1
+                continue
+
+            branch = branches[branchid]
+
+            if (branchid,f,t,branch.r) not in limits:
+                limits[(branchid,f,t,branch.r)] = 1
+            else:
+                limits[(branchid,f,t,branch.r)] += 1
+                
+            linenum += 1
+
+
+    numsel = 1000
+            
+    mostjabrs  = dict(sorted(jabrs.items(), key = lambda x: x[1], reverse = True)[:numsel])
+
+    mosti2     = dict(sorted(i2s.items(), key = lambda x: x[1], reverse = True)[:numsel])
+
+    mostlimits = dict(sorted(limits.items(), key = lambda x: x[1], reverse = True)[:numsel])
+
+    log.joint(' mostjabrs ' + str(mostjabrs) + '\n')
+    #log.joint(' mosti2s ' + str(mostjabrs) + '\n')
+    #log.joint(' mostlimits ' + str(mostjabrs) + '\n')
+
+    log.joint(' number of cones with Jabr-cuts ' + str(len(jabrs)) + '\n')
+
+    # num   = list(mostjabrs.keys())[0]
+    # count = 0
+    # numdic = {}
+    # for numcuts in mostjabrs.values():
+    #     if m
