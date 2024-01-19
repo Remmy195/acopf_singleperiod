@@ -14,7 +14,7 @@ set bus_gens {i in buses};
 set bus_Gs;
 set bus_Bs;
      
-#PARAMETERS
+#PARAMETERS      
 param fixedcost {i in gens};
 param lincost {i in gens}; 
 param quadcost {i in gens}; 
@@ -38,14 +38,16 @@ param Vmin {i in buses} >= 0; #min voltage (non squared)
 param Pmax {i in gens}; #max active power gen
 param Pmin {i in gens}; #min active power gen
 param Qmax {i in gens}; #max reactive power gen
-param Qmin {i in gens}; #min reactive power gen                                                    
+param Qmin {i in gens}; #min reactive power gen                                        
 param Pd {i in buses}; #active power demand
 param Qd {i in buses}; #reactive power demand
 param U {i in branches} >= 0; #branch power flow limit
-param theta_min {i in buses}; #angle lower limit
-param theta_max {i in buses}; #angle upper limit
+param theta_max {i in buses};
+param theta_min {i in buses};
+param maxangle {i in branches};
+param minangle {i in branches};
 param Vinit {i in buses}; #initial point
-param thetainit {i in buses}; #initial point							      
+param thetainit {i in buses}; #initial point			    
 
 #VARIABLES                                
 var v {i in buses} >= Vmin[i], <= Vmax[i], := Vinit[i]; #voltage magnitude
@@ -93,7 +95,11 @@ subject to Qbalance {i in buses}:
 subject to limits_f {i in branches}: Pf[i] ^2 + Qf[i] ^2 <= U[i] ^2;
 subject to limits_t {i in branches}: Pt[i] ^2 + Qt[i] ^2 <= U[i] ^2;
 
+#angle diff
 
+subject to MaxAnglediff {i in branches}: theta[bus_f[i]] - theta[bus_t[i]] <= maxangle[i];
+
+subject to MinAnglediff {i in branches}: theta[bus_f[i]] - theta[bus_t[i]] >= minangle[i];
 
 
              

@@ -13,11 +13,17 @@ set branches_t {i in buses};
 set bus_gens {i in buses};
 set bus_Gs;
 set bus_Bs;
+set quadgens;
+set lingens;
 
 #PARAMETERS
 param fixedcost {i in gens};
 param lincost {i in gens}; 
 param quadcost {i in gens}; 
+param alfa {i in quadgens};
+param beta {i in quadgens};
+param gamma {i in quadgens};
+param sigma;
 
 param Gtt {i in branches}; 
 param Btt {i in branches};
@@ -64,13 +70,27 @@ var Qf {i in branches} >= - U[i], <= U[i]; #limit branches
 var Qt {i in branches} >= - U[i], <= U[i]; #limit branches                   
 var Pg {i in gens} >= Pmin[i], <= Pmax[i]; #active power generator
 var Qg {i in gens} >= Qmin[i], <= Qmax[i]; #reactive power generator          
+var t_quadcost >=0;
+var t_lincost >= 0;
+var scaledPg {i in quadgens} >= 0;
+#var tplus >=0;
+#var tminus >=0;
 
 #OBJECTIVE                                                  
 
-#minimize total_cost: sum {i in gens} Pg[i];
-minimize total_cost: sum {i in gens} (fixedcost[i] + lincost[i] * Pg[i] + quadcost[i] * Pg[i] ^2);
-           
+minimize total_cost: t_quadcost + t_lincost + sigma;
+
 #CONSTRAINTS
+
+#def obj
+#subject to obj: sum {i in gens} (fixedcost[i] + lincost[i] * Pg[i] + quadcost[i] * Pg[i]) <= t;
+#subject to obj: sum {i in gens} scaledPg[i] ^2 <= tminus * tplus;
+#subject to obj: sum {i in gens} scaledPg[i] ^2 <= t * t;
+
+subject to quadobj: sum {i in quadgens} scaledPg[i] ^2 <= t_quadcost;
+
+subject to linobj: sum {i in lingens} (fixedcost[i] + lincost[i] * Pg[i]) <= t_lincost;
+
 
 #def PandQ
 
@@ -95,12 +115,22 @@ subject to Qbalance {i in buses}:
        (if i in bus_Bs then (- Bs[i] * v[i] ) else 0  ) + (sum {j in branches_f[i]} Qf[j] ) + (sum {j in branches_t[i]} Qt[j] ) = (if card(bus_gens[i]) > 0 then (sum {k in bus_gens[i]} Qg[k] ) else 0) - Qd[i];
 
 #jabrs
+
 subject to jabr {i in branches}: c[i] ^2 + s[i] ^2 <= v[bus_f[i]] * v[bus_t[i]];
 
 
 #limits
 
-#subject to limits_f {i in branches}: Pf[i] ^2 + Qf[i] ^2 <= U[i] ^2;
+subject to limits_f {i in branches}: Pf[i] ^2 + Qf[i] ^2 <= U[i] ^2;
 
-#subject to limits_t {i in branches}: Pt[i] ^2 + Qt[i] ^2 <= U[i] ^2;
-             
+subject to limits_t {i in branches}: Pt[i] ^2 + Qt[i] ^2 <= U[i] ^2;
+
+#def scaledPg
+
+subject to scaledPg_def {i in quadgens}: scaledPg[i] = alfa[i] * Pg[i] - beta[i];
+
+#def tminus, tplus
+
+#subject to tminus_def: tminus = t - sqrtsigma;
+#subject to tplus_def: tplus = t + sqrtsigma;
+
