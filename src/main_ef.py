@@ -7,10 +7,8 @@ import reader
 from myutils import breakexit
 from versioner import *
 from log import danoLogger
-from gosocp import *
-from gosocp_mosek import *
-from gosocp2 import gosocp2
-from gosocp2_mosek import *
+from goac_ef import *
+
 
 def read_config(log, filename):
 
@@ -28,45 +26,44 @@ def read_config(log, filename):
     modfile           = 'NONE'
     lpfilename        = 'lp.lp'
     solver            = 'ipopt'
-    fix_point         = 0
+    fix               = 0
+    initial_point     = 0
     multistart        = 0
-    conic             = 0
     knitropresolveoff = 0
     mytol             = 0
     
-    linenum = 0
-
+    linenum       = 0
     
     while linenum < len(lines):
         thisline = lines[linenum].split()
         if len(thisline) > 0:
 
             if thisline[0] == 'casefilename':
-                casefilename = thisline[1]
+                casefilename  = thisline[1]
 
             elif thisline[0] == 'modfile':
-                modfile = thisline[1]
+                modfile       = thisline[1]
                 
             elif thisline[0] == 'lpfilename':
-                lpfilename = thisline[1]
+                lpfilename    = thisline[1]
 
             elif thisline[0] == 'solver':
-                solver = thisline[1]
+                solver        = thisline[1]
 
-            elif thisline[0] == 'fix_point':
-                fix_point  = 1
+            elif thisline[0] == 'initial_point':
+                initial_point = 1
+
+            elif thisline[0] == 'fix':
+                fix           = 1
 
             elif thisline[0] == 'multistart':
-                multistart = 1
-
-            elif thisline[0] == 'conic':
-                conic = 1
+                multistart    = 1
 
             elif thisline[0] == 'knitropresolveoff':
-                knitropresolveoff = 1
+                knitropresolveoff    = 1
 
             elif thisline[0] == 'mytol':
-                mytol = 1
+                mytol    = 1                
                 
             elif thisline[0] == 'END':
                 break
@@ -82,10 +79,10 @@ def read_config(log, filename):
     all_data['modfile']           = modfile.split('../modfiles/')[1]
     all_data['lpfilename']        = lpfilename
     all_data['solver']            = solver
-    all_data['fix_point']         = fix_point
+    all_data['initial_point']     = initial_point
+    all_data['fix']               = fix
     all_data['multistart']        = multistart
-    all_data['conic']             = conic
-    all_data['knitropresolveoff'] = knitropresolveoff 
+    all_data['knitropresolveoff'] = knitropresolveoff
     all_data['mytol']             = mytol
     
     return all_data
@@ -94,8 +91,8 @@ if __name__ == '__main__':
     if len(sys.argv) > 3 or len(sys.argv) < 2:
         print ('Usage: main.py file.config [logfile]\n')
         exit(0)
-        
-    T0 = time.time()
+
+    T0        = time.time()
     mylogfile = "main.log"
 
     if len(sys.argv) == 3:
@@ -106,26 +103,13 @@ if __name__ == '__main__':
 
     all_data       = read_config(log,sys.argv[1])
     all_data['T0'] = T0
+
+    if all_data['modfile'] != 'ac_ef.mod' and all_data['modfile'] != 'ac_ef2.mod':
+        log.joint('Wrong modfile, please change config file\n')
+        sys.exit(0)
     
     readcode       = reader.readcase(log,all_data,all_data['casefilename'])
-    
 
-    if all_data['modfile'] == 'jabr.mod':
-        gosocp(log,all_data)
-    elif all_data['modfile'] == 'jabrwithquad.mod':
-        gosocp(log,all_data)
-    elif all_data['modfile'] == 'Qjabr.mod':
-        gosocp(log,all_data)        
-    elif all_data['modfile'] == 'jabr_linobj.mod':
-        gosocp(log,all_data)
-    elif all_data['modfile'] == 'jabr_mosek.mod':
-        gosocp_mosek(log,all_data)        
-    elif all_data['modfile'] == 'i2.mod':
-        gosocp2(log,all_data)
-    elif all_data['modfile'] == 'i2_mosek.mod':
-        gosocp2_mosek(log,all_data)        
-    else:
-        log.joint('Wrong modfile, please check config file\n')
-        exit(0)
-        
+    goac_ef(log,all_data)    
+
     log.closelog()

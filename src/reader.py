@@ -99,10 +99,12 @@ class branch:
        self.upperanglenone = 0
 
        if maxangle == 360 or maxangle == 0:
+         self.maxangle_rad   = 2*math.pi
          self.upperanglenone = 1
 
        self.loweranglenone = 0         
        if minangle == -360 or minangle == 0:
+         self.minangle_rad   = -2*math.pi
          self.loweranglenone = 1
 
        self.invratio2 = invratio2 = 1/ratio**2

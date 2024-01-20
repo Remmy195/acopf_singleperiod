@@ -36,12 +36,12 @@ def gosocp(log,all_data):
     ampl.eval("option show_stats 2;")
 
     if all_data['solver'] == 'gurobi_ampl':
-        #ampl.eval("option gurobi_options 'method=2 barhomogeneous=1 numericfocus=1 barconvtol=1e-6 outlev=1 TimeLimit=1000';")
-        ampl.eval("option gurobi_options 'method=2 barhomogeneous=1 numericfocus=1 barconvtol=1e-6 outlev=1 iisfind=1 writemodel=jabr.lp resultfile=jabr.ilp';")
+        ampl.eval("option gurobi_options 'method=2 barhomogeneous=1 numericfocus=1 barconvtol=1e-6 outlev=1 TimeLimit=1000';")
+        #ampl.eval("option gurobi_options 'method=2 barhomogeneous=1 numericfocus=1 barconvtol=1e-6 outlev=1 iisfind=1 writemodel=jabr.lp resultfile=jabr.ilp';")
 
     if all_data['solver'] == 'knitroampl':
         if all_data['mytol']:
-            ampl.eval("option knitro_options 'feastol_abs=1e-6 opttol_abs=1e-6 blasoptionlib=1 numthreads=20 linsolver=5 honorbnds=1 maxtime_real=1000 convex=1';") #bar_conic_enable=1
+            ampl.eval("option knitro_options 'feastol_abs=1e-6 opttol_abs=1e-6 blasoptionlib=1 numthreads=20 linsolver=5 maxtime_real=1000 convex=1';") #bar_conic_enable=1  honorbnds=1
         elif all_data['multistart']:
             ampl.eval("option knitro_options 'ms_enable=1 ms_numthreads=10 ms_maxsolves=5 ms_terminate =1';")
         elif all_data['knitropresolveoff']:
@@ -227,7 +227,7 @@ def gosocp(log,all_data):
         c_lbound[branchcount] = lbound
         
         # Sine                                                                         
-        if maxanglerad <= math.pi/2:
+        if maxanglerad <= 0.5*math.pi:
             ubound = maxprod*math.sin(maxanglerad)
 
             if  minanglerad >= -0.5*math.pi:

@@ -7,10 +7,7 @@ import reader
 from myutils import breakexit
 from versioner import *
 from log import danoLogger
-from gosocp import *
-from gosocp_mosek import *
-from gosocp2 import gosocp2
-from gosocp2_mosek import *
+from gosocp_exp import *
 
 def read_config(log, filename):
 
@@ -110,22 +107,13 @@ if __name__ == '__main__':
     readcode       = reader.readcase(log,all_data,all_data['casefilename'])
     
 
-    if all_data['modfile'] == 'jabr.mod':
-        gosocp(log,all_data)
-    elif all_data['modfile'] == 'jabrwithquad.mod':
-        gosocp(log,all_data)
-    elif all_data['modfile'] == 'Qjabr.mod':
-        gosocp(log,all_data)        
-    elif all_data['modfile'] == 'jabr_linobj.mod':
-        gosocp(log,all_data)
-    elif all_data['modfile'] == 'jabr_mosek.mod':
-        gosocp_mosek(log,all_data)        
-    elif all_data['modfile'] == 'i2.mod':
-        gosocp2(log,all_data)
-    elif all_data['modfile'] == 'i2_mosek.mod':
-        gosocp2_mosek(log,all_data)        
-    else:
-        log.joint('Wrong modfile, please check config file\n')
-        exit(0)
-        
+    # if all_data['modfile'] == 'jabr.mod':
+    #     gosocp(log,all_data)
+    # elif all_data['modfile'] == 'jabr_i2.mod':
+    #     gosocp2(log,all_data)    
+    # else:
+    #     log.joint('Wrong modfile, please check config file\n')
+    #     exit(0)
+    gosocp(log,all_data)
+    
     log.closelog()
