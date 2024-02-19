@@ -1,8 +1,15 @@
-##########################################################
-
-#              An SOC relaxation of ACOPF 
-  
-##########################################################
+###############################################################################
+##                                                                           ##      
+## This AMPL modfile of a conic relaxation (i2 SOCP) for ACOPF was           ##
+## written and is being maintained by Matias Villagra,                       ##
+## PhD Student in Operations Research @ Columbia, supervised by              ## 
+## Daniel Bienstock.                                                         ##      
+##                                                                           ##    
+## Please report any bugs or issues to mjv2153@columbia.edu                  ##     
+##                                                                           ##      
+## Oct 2023                                                                  ## 
+###############################################################################
+   
 
 #SETS                                
 set buses;

@@ -1,8 +1,15 @@
-#################
+###############################################################################
+##                                                                           ##      
+## This AMPL modfile of the Jabr relaxation for ACOPF was written and        ##
+## is being maintained by Matias Villagra,                                   ##
+## PhD Student in Operations Research @ Columbia, supervised by              ## 
+## Daniel Bienstock.                                                         ##      
+##                                                                           ##    
+## Please report any bugs or issues to mjv2153@columbia.edu                  ##     
+##                                                                           ##      
+## Oct 2023                                                                  ## 
+###############################################################################
 
-#A conic relaxation (Jabr) of ACOPF 
-  
-#################
 
 #SETS                                
 set buses;

@@ -1,8 +1,15 @@
-#################
+###############################################################################
+##                                                                           ##      
+## This AMPL modfile of the Jabr relaxation for ACOPF was written and        ##
+## is being maintained by Matias Villagra,                                   ##
+## PhD Student in Operations Research @ Columbia, supervised by              ## 
+## Daniel Bienstock.                                                         ##      
+##                                                                           ##    
+## Please report any bugs or issues to mjv2153@columbia.edu                  ##     
+##                                                                           ##      
+## Oct 2023                                                                  ## 
+###############################################################################
 
-#A conic relaxation (Jabr) of ACOPF 
-  
-#################
 
 #SETS                                
 set buses;
@@ -100,7 +107,7 @@ subject to jabr {i in branches}: c[i] ^2 + s[i] ^2 <= v[bus_f[i]] * v[bus_t[i]];
 
 #limits
 
-#subject to limits_f {i in branches}: Pf[i] ^2 + Qf[i] ^2 <= U[i] ^2;
+subject to limits_f {i in branches}: Pf[i] ^2 + Qf[i] ^2 <= U[i] ^2;
 
-#subject to limits_t {i in branches}: Pt[i] ^2 + Qt[i] ^2 <= U[i] ^2;
+subject to limits_t {i in branches}: Pt[i] ^2 + Qt[i] ^2 <= U[i] ^2;
              

@@ -1,8 +1,15 @@
-##########################################################
+###############################################################################
+##                                                                           ##      
+## This AMPL modfile of a conic relaxation (i2 SOCP) for ACOPF was           ##
+## written and is being maintained by Matias Villagra,                       ##
+## PhD Student in Operations Research @ Columbia, supervised by              ## 
+## Daniel Bienstock.                                                         ##      
+##                                                                           ##    
+## Please report any bugs or issues to mjv2153@columbia.edu                  ##     
+##                                                                           ##      
+## Oct 2023                                                                  ## 
+###############################################################################
 
-#              An SOC relaxation of ACOPF 
-  
-##########################################################
 
 #SETS                                
 set buses;
@@ -64,7 +71,7 @@ param s_lbound {i in branches};
 #var s {i in branches} >= - CSmax[i], <= CSmax[i];#, := Sinit[i];
 var c {i in branches} >= c_lbound[i], <= c_ubound[i];#, := Cinit[i];
 var s {i in branches} >= s_lbound[i], <= s_ubound[i];#, := Sinit[i]; 
-var v {i in buses} >= Vmin[i] ^2, <= Vmax[i] ^2, := Vinit[i];
+var v {i in buses} >= Vmin[i] ^2, <= Vmax[i] ^2;#, := Vinit[i];
 var Pf {i in branches} >= - U[i], <= U[i]; #limit branches
 var Pt {i in branches} >= - U[i], <= U[i]; #limit branches
 var Qf {i in branches} >= - U[i], <= U[i]; #limit branches
