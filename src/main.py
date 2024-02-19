@@ -1,4 +1,5 @@
 #!/usr/bin/python                                                                                                                         
+
 import sys
 import os
 import numpy as np
@@ -7,8 +8,8 @@ import reader
 from myutils import breakexit
 from versioner import *
 from log import danoLogger
-from goac import *
-
+from ac import *
+from socp import *
 
 def read_config(log, filename):
 
@@ -24,13 +25,13 @@ def read_config(log, filename):
 
     casefilename      = 'NONE'
     modfile           = 'NONE'
-    lpfilename        = 'lp.lp'
-    solver            = 'ipopt'
+    solver            = 'knitroampl'
     fix               = 0
+    fix_point         = 0
     initial_point     = 0
     multistart        = 0
-    knitropresolveoff = 0
     mytol             = 0
+    writesol          = 0
     
     linenum       = 0
     
@@ -56,14 +57,17 @@ def read_config(log, filename):
             elif thisline[0] == 'fix':
                 fix           = 1
 
+            elif thisline[0] == 'fix_point':
+                fix_point     = 1                
+
             elif thisline[0] == 'multistart':
                 multistart    = 1
 
-            elif thisline[0] == 'knitropresolveoff':
-                knitropresolveoff    = 1
-
             elif thisline[0] == 'mytol':
-                mytol    = 1                
+                mytol    = 1
+
+            elif thisline[0] == 'writesol':
+                writesol    = 1                                
                 
             elif thisline[0] == 'END':
                 break
@@ -77,13 +81,13 @@ def read_config(log, filename):
     all_data['casefilename']      = casefilename
     all_data['casename']          = casefilename.split('data/')[1].split('.m')[0]
     all_data['modfile']           = modfile.split('../modfiles/')[1]
-    all_data['lpfilename']        = lpfilename
     all_data['solver']            = solver
     all_data['initial_point']     = initial_point
+    all_data['fix_point']         = fix_point    
     all_data['fix']               = fix
     all_data['multistart']        = multistart
-    all_data['knitropresolveoff'] = knitropresolveoff
     all_data['mytol']             = mytol
+    all_data['writesol']          = writesol    
     
     return all_data
 
@@ -103,13 +107,47 @@ if __name__ == '__main__':
 
     all_data       = read_config(log,sys.argv[1])
     all_data['T0'] = T0
-
-    if all_data['modfile'] != 'ac.mod':
-        log.joint('Wrong modfile, please change config file\n')
-        sys.exit(0)
     
-    readcode       = reader.readcase(log,all_data,all_data['casefilename'])
+    readcode = reader.readcase(log,all_data,all_data['casefilename'])
 
-    goac(log,all_data)    
+    if all_data['modfile'] == 'ac.mod' or all_data['modfile'] == 'ac2.mod':
+        if all_data['solver'] != 'knitroampl':
+            log.joint('Wrong solver/modfile, please check config file\n')
+            exit(1)
+        else:
+            goac(log,all_data)
+        
+    elif all_data['modfile'] == 'jabr.mod':
+        if all_data['solver'] != 'mosek':
+            gosocp(log,all_data)
+        else:
+            log.joint('Wrong solver/modfile, please check config file\n')
+            exit(1)
 
+    elif all_data['modfile'] == 'jabr_mosek.mod':
+        if all_data['solver'] == 'mosek':
+            gosocp_mosek(log,all_data)
+        else:
+            log.joint('Wrong solver/modfile, please check config file\n')
+            exit(1)            
+            
+    elif all_data['modfile'] == 'i2.mod':
+        if all_data['solver'] != 'mosek':
+            gosocp2(log,all_data)
+        else:
+            log.joint('Wrong solver/modfile, please check config file\n')
+            exit(1)
+
+    elif all_data['modfile'] == 'i2_mosek.mod':
+        if all_data['solver'] == 'mosek':
+            gosocp2_mosek(log,all_data)
+        else:
+            log.joint('Wrong solver/modfile, please check config file\n')
+            exit(1)
+            
+    else:
+        log.joint('Wrong solver/modfile, please check config file\n')
+        exit(1)
+        
     log.closelog()
+
