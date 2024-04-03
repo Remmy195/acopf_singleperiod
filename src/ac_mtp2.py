@@ -44,7 +44,7 @@ def goac_mtp2(log,all_data):
     ampl.setOption('show_stats',2)
     ampl.setOption('solver',solver)    
 
-    log.joint(" solver set to " + solver + "\n")
+    log.joint("\n solver set to " + solver + "\n")
     
     if all_data['AMPL_presolve']:
         ampl.setOption('presolve',1)
@@ -68,7 +68,7 @@ def goac_mtp2(log,all_data):
     if all_data['multistart']:
         solver_options = "option knitro_options 'feastol_abs=1e-6 opttol_abs=1e-6 blasoptionlib=1 numthreads=20 linsolver=5 maxtime_real=2400 ms_enable=1 ms_numthreads=10 ms_maxsolves=5 ms_terminate =1';"
         ampl.eval(solver_options)
-
+        
     # Initial solution (flat-start or previously computed AC solutions)
     Vinit_mtp, thetadiffinit_mtp = initial_solution_mtp2(log,all_data)
 
@@ -246,7 +246,6 @@ def goac_mtp2(log,all_data):
     log.joint(" sets and time-invariant parameters loaded\n")
 
     # Initializing data structure for AC solutions
-    
     datastruct_acsolutions(log,all_data)
 
     # Main loop
@@ -285,7 +284,7 @@ def goac_mtp2(log,all_data):
         
         # Expand
         if all_data['expand']:
-            filename = casename + "_" + casetype + "_" + str(k) + "_NLP.out"
+            filename = casename + "_" + casetype + "_" + str(k) + "_acNLP.out"
             log.joint('Now expanding to %s.\n'%(filename))
             amplstate = 'expand; display {j in 1.._nvars} (_varname[j],_var[j].lb,_var[j].ub);' 
             modelout = ampl.getOutput(amplstate)
@@ -480,7 +479,11 @@ def goac_mtp2(log,all_data):
         writesol(log,all_data)
         writesol_qcqp_allvars(log,all_data)
  
-    
+    if status == 0:
+        return 0
+    else:
+        return 1
+        
 def writesol(log,all_data):
 
     branches     = all_data['branches']
@@ -1186,11 +1189,11 @@ def getloads(log,all_data):
     T        = all_data['T']
 
     if all_data['nperturb']:
-        filename = '../../cutplane/newmtploads2/' + casename + '_mtploads_' + str(T) + '_n1.txt'
+        filename = '../data/mtploads/' + casename + '_mtploads_' + str(T) + '_n1.txt'
     elif all_data['uniform']:
-        filename = '../../cutplane/newmtploads2/' + casename + '_mtploads_' + str(T) + '_u' + str(all_data['uniform_drift']) + '.txt'
+        filename = '../data/mtploads/' + casename + '_mtploads_' + str(T) + '_u' + str(all_data['uniform_drift']) + '.txt'
     elif all_data['uniform2']:
-        filename = '../../cutplane/newmtploads2/' + casename + '_mtploads_' + str(T) + '_u2.txt'
+        filename = '../data/mtploads/' + casename + '_mtploads_' + str(T) + '_u2.txt'
 
     try:
         thefile = open(filename, "r")
@@ -1198,7 +1201,7 @@ def getloads(log,all_data):
         lenlines = len(lines) - 1 # END                                                  
         thefile.close()
     except:
-        log.stateandquit("Cannot open file " + datafilename)
+        log.stateandquit("Cannot open file " + filename)
         sys.exit("Check file with loads")
 
     buses        = all_data['buses']
@@ -1229,11 +1232,11 @@ def getloads_check(log,all_data):
     T        = all_data['T'] + 3
 
     if all_data['nperturb']:
-        filename = '../../cutplane/newmtploads2/' + casename + '_mtploads_' + str(T) + '_n1.txt'
+        filename = '../data/mtploads/' + casename + '_mtploads_' + str(T) + '_n1.txt'
     elif all_data['uniform']:
-        filename = '../../cutplane/newmtploads2/' + casename + '_mtploads_' + str(T) + '_u' + str(all_data['uniform_drift']) + '.txt'
+        filename = '../data/mtploads/' + casename + '_mtploads_' + str(T) + '_u' + str(all_data['uniform_drift']) + '.txt'
     elif all_data['uniform2']:
-        filename = '../../cutplane/newmtploads2/' + casename + '_mtploads_' + str(T) + '_u2.txt'
+        filename = '../data/mtploads/' + casename + '_mtploads_' + str(T) + '_u2.txt'
 
     try:
         thefile = open(filename, "r")
@@ -1241,7 +1244,7 @@ def getloads_check(log,all_data):
         lenlines = len(lines) - 1 # END                                                  
         thefile.close()
     except:
-        log.stateandquit("Cannot open file " + datafilename)
+        log.stateandquit("Cannot open file " + filename)
         sys.exit("Check file with loads")
 
     buses        = all_data['buses']
@@ -1267,7 +1270,7 @@ def getrampr(log,all_data):
 
     casename = all_data['casename']
     T        = all_data['T']
-    filename = '../../cutplane/ramprates/' + casename + '_rampr_' + str(T) + '.txt'
+    filename = '../data/ramprates/' + casename + '_rampr_' + str(T) + '.txt'
     try:
         thefile = open(filename, "r")
         lines = thefile.readlines()

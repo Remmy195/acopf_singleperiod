@@ -7,7 +7,7 @@
 ## Please report any bugs or issues (for sure there will be) to              ##     
 ##                        mjv2153@columbia.edu                               ##      
 ##                                                                           ##  
-## Oct 2023                                                                  ## 
+## April 2024                                                                ## 
 ###############################################################################
 
 from amplpy import AMPL
@@ -20,9 +20,9 @@ import os
 import platform
 
 
-def gosocp(log,all_data):
+def gosocp_mtp(log,all_data):
 
-    log.joint('creating ampl object ...\n')
+    log.joint(' creating ampl object ...\n')
 
     ampl         = AMPL()
     casename     = all_data['casename']
@@ -32,7 +32,7 @@ def gosocp(log,all_data):
     IDtoCountmap = all_data['IDtoCountmap']
     T            = all_data['T']
 
-    log.joint('reading modfile ...\n')
+    log.joint(' reading modfile ...\n')
     
     t0 = time.time()
     ampl.read('../modfiles/' + modfile)
@@ -40,13 +40,12 @@ def gosocp(log,all_data):
     log.joint(" modfile read in time " + str(t1-t0))
 
     # Setting up AMPL options
-    
     ampl.setOption('display_precision',0)
     ampl.setOption('expand_precision',0)
     ampl.setOption('show_stats',2)
     ampl.setOption('solver',solver)    
 
-    log.joint(" solver set to " + solver + "\n")
+    log.joint("\n solver set to " + solver + "\n")
     
     if all_data['AMPL_presolve']:
         ampl.setOption('presolve',1)
@@ -57,19 +56,14 @@ def gosocp(log,all_data):
 
 
     # Solver options (Gurobi and AMPL)
-    
     if all_data['solver'] == 'gurobi_ampl':
-        ampl.eval("option gurobi_options 'method=2 barhomogeneous=1 numericfocus=1 barconvtol=1e-6 outlev=1 TimeLimit=2400 writemodel=jabr.lp';") #resultfile=jabr.ilp #iisfind=1
+        ampl.eval("option gurobi_options 'method=2 barhomogeneous=1 numericfocus=1 barconvtol=1e-6 outlev=1 TimeLimit=2400';") #resultfile=jabr.ilp #iisfind=1
 
     elif all_data['solver'] == 'knitroampl':
-        ampl.eval("option knitro_options 'feastol_abs=1e-6 opttol_abs=1e-6 blasoptionlib=1 numthreads=20 linsolver=5 maxtime_real=2400 convex=1 honorbnds=1';") #bar_conic_enable=1  honorbnds=1 #bmu_rule check
+        ampl.eval("option knitro_options 'feastol_abs=1e-6 opttol_abs=1e-6 blasoptionlib=1 numthreads=20 linsolver=5 maxtime_real=2400 convex=1 honorbnds=1';") #bar_conic_enable
 
-    else:
-        log.joint(' check configuration file\n')
-        exit(1)
-
-    # Warm-start solution
-        
+    
+    # Warm-start solution        
     if all_data['initial_solution']:
         log.joint(' loading initial point\n')
         Vinit, Cinit, Sinit = getsol_ac_mtp2(log,all_data) # Using AC solutions obtained a period at a time
@@ -88,11 +82,10 @@ def gosocp(log,all_data):
                 Sinit[branchcount,k] = 0
 
     # Getting multi-time period loads and ramp rates from file
-    
-    log.joint(' getting multi-time period loads and ramping rates\n')
-    
+    log.joint(' getting multi-time period loads and ramping rates\n')    
     Pd             = getloads(log,all_data)
     rampru, ramprd = getrampr(log,all_data)
+    
         
     # Setting up buses
     buses        = {}
@@ -189,8 +182,7 @@ def gosocp(log,all_data):
         bus_t[branchcount]    = branch.id_t
 
         # cs bounds
-        # Assumption: zero angle difference is always allowed
-        
+        # Assumption: zero angle difference is always allowed    
         maxprod     = Vmax[branch.id_f] * Vmax[branch.id_t]
         minprod     = Vmin[branch.id_f] * Vmin[branch.id_t]
 
@@ -268,19 +260,15 @@ def gosocp(log,all_data):
 
 
     # Expand
-    
     if all_data['expand']:
-        time1 = time.time()
-        filename = 'basemodel.out'
-        doNLP = 1
-        if doNLP:
-            filename = 'NLP.out'
+        filename = casename + "_" + casetype + "_socpNLP.out"
         log.joint('Now expanding to %s.\n'%(filename))
         amplstate = 'expand; display {j in 1.._nvars} (_varname[j],_var[j].lb,_var[j].ub);'
         modelout = ampl.getOutput(amplstate)
         outfile = open(filename,"w")
         outfile.write("model = " + str(modelout) + "\n")
         outfile.close()
+
         
     # Solve
     log.joint('solving model ...\n')
@@ -335,8 +323,8 @@ def gosocp(log,all_data):
     sumQLoss = 0
     
     for branchcount,h in Pfvalues.keys():
-        PLoss[branchcount,h] = all_data['Pfvalues'][branchcount,h] + all_data['Ptvalues'][branchcount,h] 
-        QLoss[branchcount,h] = all_data['Qfvalues'][branchcount,h] + all_data['Qtvalues'][branchcount,h] 
+        PLoss[branchcount,h] = Pfvalues[branchcount,h] + Ptvalues[branchcount,h] 
+        QLoss[branchcount,h] = Qfvalues[branchcount,h] + Qtvalues[branchcount,h] 
         sumPLoss += PLoss[branchcount,h]
         sumQLoss += QLoss[branchcount,h]
         
@@ -349,7 +337,6 @@ def gosocp(log,all_data):
     timesofar = time.time() - all_data['T0']        
 
     # Logging solution
-
     log.joint(' case ' + casename + ' time-periods ' + str(T)
               + ' ' + casetype + '\n')
     if all_data['solver'] == 'knitroampl':
@@ -412,12 +399,10 @@ def writesol(log,all_data):
 
 
     datenow       = '_01_28_24'
-
     
     if all_data['modfile'] == 'i2.mod' or all_data['modfile'] == 'i2_mosek.mod':
         i2fvalues = all_data['i2fvalues']
 
-        
     if all_data['modfile'] == 'jabr.mod' or all_data['modfile'] == 'jabr_mtp.mod' or all_data['modfile'] == 'jabr_mosek.mod':
         if all_data['solver'] == 'knitroampl':
             filename      = 'JABRsol_knitro_' + all_data['casename'] + '_' + str(T) + '_' + casetype + '.txt'
@@ -443,6 +428,7 @@ def writesol(log,all_data):
 
     log.joint(' writing solution to ' + filename + '\n')
 
+    # Comment this if not running instance on cool1 
     machinename    = "cool1"
     now            = time.time()
     AMPL_version   = 'Version 20231012'
@@ -576,7 +562,8 @@ def writesol_allvars(log,all_data):
 
 
     log.joint(' writing solution to ' + filename + '\n')
-    
+
+    # Comment this if not running instance on cool1 
     machinename    = "cool1"
     now            = time.time()
     AMPL_version   = 'Version 20231012'
@@ -739,23 +726,9 @@ def gosocp2(log,all_data):
         #ampl.eval("option gurobi_options 'method=2 barhomogeneous=1 numericfocus=1 barconvtol=1e-6 outlev=1 iisfind=1 writemodel=jabr.lp resultfile=jabr.ilp';")
 
     elif all_data['solver'] == 'knitroampl':
-        if all_data['mytol']:
-            ampl.eval("option knitro_options 'feastol_abs=1e-6 opttol_abs=1e-6 blasoptionlib=1 numthreads=20 linsolver=5 maxtime_real=1000 convex=1';") #bar_conic_enable=1
-        elif all_data['multistart']:
-            ampl.eval("option knitro_options 'ms_enable=1 ms_numthreads=10 ms_maxsolves=5 ms_terminate =1';")
-        elif all_data['knitropresolveoff']:
-            ampl.eval("option knitro_options 'presolve=0';")       
-        else:
-            ampl.eval("option knitro_options 'blasoptionlib=1 numthreads=20 linsolver=7 maxtime_real=1000';") 
+        ampl.eval("option knitro_options 'feastol_abs=1e-6 opttol_abs=1e-6 blasoptionlib=1 numthreads=20 linsolver=5 maxtime_real=1000 convex=1';")
+        
 
-
-    if all_data['fix_point']:
-        getsol_knitro(log,all_data)
-        tolerance = 1e-05
-        log.joint(' fixing tolerance to ' + str(tolerance) + '\n')
-        mp_vm    = all_data['mp_vm']
-	#mp_angle = all_data['mp_angle']
-        print(mp_vm)
 
     IDtoCountmap = all_data['IDtoCountmap']
         
@@ -1140,7 +1113,7 @@ def gosocp2(log,all_data):
 
 def gosocp_mosek_mtp(log,all_data):
 
-    log.joint('creating ampl object ...\n')
+    log.joint(' creating ampl object ...\n')
 
     ampl         = AMPL()
     casename     = all_data['casename']
@@ -1150,7 +1123,7 @@ def gosocp_mosek_mtp(log,all_data):
     IDtoCountmap = all_data['IDtoCountmap']
     T            = all_data['T']
 
-    log.joint('reading modfile ...\n')
+    log.joint(' reading modfile ...\n')
     
     t0 = time.time()
     ampl.read('../modfiles/' + modfile)
@@ -1158,13 +1131,12 @@ def gosocp_mosek_mtp(log,all_data):
     log.joint(" modfile read in time " + str(t1-t0))
 
     # Setting up AMPL options
-    
     ampl.setOption('display_precision',0)
     ampl.setOption('expand_precision',0)
     ampl.setOption('show_stats',2)
     ampl.setOption('solver',solver)    
 
-    log.joint(" solver set to " + solver + "\n")
+    log.joint("\n solver set to " + solver + "\n")
     
     if all_data['AMPL_presolve']:
         ampl.setOption('presolve',1)
@@ -1190,7 +1162,6 @@ def gosocp_mosek_mtp(log,all_data):
 
 
     # Warm-start solution
-        
     if all_data['initial_solution']:
         log.joint(' loading initial point\n')
         Vinit, Cinit, Sinit = getsol_ac_mtp2(log,all_data)
@@ -1410,7 +1381,6 @@ def gosocp_mosek_mtp(log,all_data):
 
 
     # Expand
-    
     if all_data['expand']:
         time1 = time.time()
         filename = 'basemodel.out'
@@ -1560,13 +1530,6 @@ def gosocp2_mosek(log,all_data):
     ampl.eval("option show_stats 2;")
     ampl.eval("option mosek_options 'tech:optionnativeread=/opt/newampl/mosekopt outlev=1 sol:chk:feastol=1e-08 chk:mode=2';")    
     #cvt:socp=0  writemodel=i2.ptf
-
-    if all_data['fix_point']:
-        getsol_knitro(log,all_data)
-        tolerance = 1e-05
-        log.joint(' fixing tolerance to ' + str(tolerance) + '\n')
-        mp_vm    = all_data['mp_vm']
-	#mp_angle = all_data['mp_angle']
 
     IDtoCountmap = all_data['IDtoCountmap']
         
@@ -1882,21 +1845,16 @@ def gosocp2_mosek(log,all_data):
 
     log.joint(" sets and parameters loaded\n")
 
-    log.joint(" saving processed data to all_data\n")
-    
-    expand = all_data['expand']
-    if expand:
-        time1 = time.time()
-        filename = 'basemodel.out'
-        doNLP = 1
-        if doNLP:
-            filename = 'NLP.out'
+
+    if all_data['expand']:
+        filename = casename + "_" + casetype + "_socpNLP.out"
         log.joint('Now expanding to %s.\n'%(filename))
-        amplstate = 'expand; display {j in 1.._nvars} (_varname[j],_var[j].lb,_var[j].ub);' #shows full mod    
+        amplstate = 'expand; display {j in 1.._nvars} (_varname[j],_var[j].lb,_var[j].ub);'
         modelout = ampl.getOutput(amplstate)
         outfile = open(filename,"w")
         outfile.write("model = " + str(modelout) + "\n")
         outfile.close()
+
         
     # Solver
     log.joint(" solving model ...\n")
@@ -1922,39 +1880,62 @@ def gosocp2_mosek(log,all_data):
     Qtvar                   = ampl.get_variable("Qt")
     GenPvar                 = ampl.get_variable("Pg")
     GenQvar                 = ampl.get_variable("Qg")
-    all_data['objvalue']    = total_costvar.get().value()
-    all_data['v2values']    = v2var.get_values().to_dict()
-    all_data['i2fvalues']   = i2fvar.get_values().to_dict()
-    all_data['cvalues']     = cvar.get_values().to_dict()
-    all_data['svalues']     = svar.get_values().to_dict()
-    all_data['GenPvalues']  = GenPvar.get_values().to_dict()
-    all_data['GenQvalues']  = GenQvar.get_values().to_dict()
-    all_data['Pfvalues']    = Pfvar.get_values().to_dict()
-    all_data['Ptvalues']    = Ptvar.get_values().to_dict()
-    all_data['Qfvalues']    = Qfvar.get_values().to_dict()
-    all_data['Qtvalues']    = Qtvar.get_values().to_dict()
+    objvalue   = all_data['objvalue']    = total_costvar.get().value()
+    v2values   = all_data['v2values']    = v2var.get_values().to_dict()
+    cvalues    = all_data['cvalues']     = cvar.get_values().to_dict()
+    svalues    = all_data['svalues']     = svar.get_values().to_dict()
+    GenPvalues = all_data['GenPvalues']  = GenPvar.get_values().to_dict()
+    GenQvalues = all_data['GenQvalues']  = GenQvar.get_values().to_dict()
+    Pfvalues   = all_data['Pfvalues']    = Pfvar.get_values().to_dict()
+    Ptvalues   = all_data['Ptvalues']    = Ptvar.get_values().to_dict()
+    Qfvalues   = all_data['Qfvalues']    = Qfvar.get_values().to_dict()
+    Qtvalues   = all_data['Qtvalues']    = Qtvar.get_values().to_dict()
 
-    PLoss   = {}
-    QLoss   = {}
-    for branch in all_data['Pfvalues'].keys():
-        PLoss[branch] = all_data['Pfvalues'][branch] + all_data['Ptvalues'][branch] 
-        QLoss[branch] = all_data['Qfvalues'][branch] + all_data['Qtvalues'][branch] 
 
-    timesofar = time.time() - all_data['T0']        
+    sumPd = 0
+    for buscount,h in Pd.keys():
+        sumPd += Pd[buscount,h]
+
+    sumQd = 0
+    for buscount in Qd.keys():
+        sumQd += Qd[buscount]
+
+    sumQd = sumQd * T
+        
+    PLoss    = {}
+    QLoss    = {}
+    sumPLoss = 0
+    sumQLoss = 0
     
-    log.joint(" case " + all_data['casefilename'] + "\n")
-    log.joint(" modfile " + all_data['modfile'] + "\n")
+    for branchcount,h in Pfvalues.keys():
+        PLoss[branchcount,h] = Pfvalues[branchcount,h] + Ptvalues[branchcount,h] 
+        QLoss[branchcount,h] = Qfvalues[branchcount,h] + Qtvalues[branchcount,h] 
+        sumPLoss += PLoss[branchcount,h]
+        sumQLoss += QLoss[branchcount,h]
+        
+    sumGenP = 0
+    sumGenQ = 0
+    for gencount,h in GenPvalues.keys():
+        sumGenP += GenPvalues[gencount,h]
+        sumGenP += GenQvalues[gencount,h]
+        
+    timesofar = time.time() - all_data['T0']        
+
+    # Logging solution
+    log.joint(' case ' + casename + ' time-periods ' + str(T)
+              + ' ' + casetype + '\n')
     log.joint(" solver " + all_data['solver'] + "\n")
-    log.joint(" objective " + str(all_data['objvalue']) + '\n')
-    log.joint(" active power generation " + str(sum(all_data['GenPvalues'])) + '\n')
-    log.joint(" active power demand " + str(sum(Pd.values())) + '\n')
-    log.joint(" active power loss " + str(sum(PLoss.values())) + '\n')
-    log.joint(" reactive power generation " + str(sum(all_data['GenQvalues'])) + '\n')
-    log.joint(" reactive power demand " + str(sum(Qd.values())) + '\n')
-    log.joint(" reactive power loss " + str(sum(QLoss.values())) + '\n')
+    log.joint(" objective " + str(objvalue) + '\n')    
+    log.joint(" modfile " + all_data['modfile'] + "\n")
+    log.joint(" active power generation " + str(sumGenP) + '\n')
+    log.joint(" active power demand " + str(sumPd) + '\n')
+    log.joint(" active power loss " + str(sumPLoss) + '\n')
+    log.joint(" reactive power generation " + str(sumGenQ) + '\n')
+    log.joint(" reactive power demand " + str(sumQd) + '\n')
+    log.joint(" reactive power loss " + str(sumQLoss) + '\n')
     log.joint(" solver runtime " + str(t1-t0) + '\n')
     log.joint(" time so far " + str(timesofar) + '\n')    
-
+    
     log.joint(" writing casename, modfile, obj and runtime to summary_socp.log\n")
 
     summary_socp = open("summary_socp.log","a+")
@@ -1971,63 +1952,6 @@ def gosocp2_mosek(log,all_data):
         writesol(log,all_data)
         writesol_allvars(log,all_data)
     
-    
-def getsol_knitro(log,all_data):
-    
-    casename = all_data['casename']
-    #filename = 'knitro_sols/'+ casename +'.txt'
-    filename = 'ksol_'+ casename +'.txt'
-    try:
-        thefile = open(filename, "r")
-        lines = thefile.readlines()
-        lenlines = len(lines)
-        thefile.close()
-    except:
-        log.stateandquit("cannot open file " + datafilename)
-        sys.exit("failure")
-
-    branches     = all_data['branches']
-    buses        = all_data['buses']
-    IDtoCountmap = all_data['IDtoCountmap']
-
-    mp_vm      = {}
-    mp_angle   = {}
-    mp_cvalues = {}
-    mp_svalues = {}
-
-    mp_Pfvalues = {}
-    mp_Ptvalues = {}
-    mp_Qfvalues = {}
-    mp_Qtvalues = {}
-    linenum = 2
-
-    log.joint(' reading file\n')
-    while linenum < lenlines:
-        thisline = lines[linenum].split()
-
-        if thisline[0] == 'bus':
-            buscount        = int(thisline[1])
-            mp_vm[buscount] = float(thisline[3])
-            #mp_cvalues[bus] = mp_vm[bus]**2
-        elif thisline[0] == 'branch':
-            branchcount     = int(thisline[1])
-            mp_Pfvalues[branchcount] = float(thisline[7])
-            mp_Ptvalues[branchcount] = float(thisline[9])
-            mp_Qfvalues[branchcount] = float(thisline[11])
-            mp_Qtvalues[branchcount] = float(thisline[13])
-            #mp_cvalues[branchcount] = float(thisline[15])
-            #mp_svalues[branchcount] = float(thisline[17])
-        linenum += 1
-
-    all_data['mp_Pfvalues'] = mp_Pfvalues
-    all_data['mp_Ptvalues'] = mp_Ptvalues
-    all_data['mp_Qfvalues'] = mp_Qfvalues
-    all_data['mp_Qtvalues'] = mp_Qtvalues
-
-    all_data['mp_vm']      = mp_vm
-    #all_data['mp_cvalues'] = mp_cvalues
-    #all_data['mp_svalues'] = mp_svalues
-    
 
 def getloads(log,all_data):
     
@@ -2035,11 +1959,11 @@ def getloads(log,all_data):
     T        = all_data['T']
     
     if all_data['nperturb']:
-        filename = '../../cutplane/newmtploads2/' + casename + '_mtploads_' + str(T) + '_n.txt'
+        filename = '../data/mtploads/' + casename + '_mtploads_' + str(T) + '_n.txt'
     elif all_data['uniform']:
-        filename = '../../cutplane/newmtploads2/' + casename + '_mtploads_' + str(T) + '_u' + str(all_data['uniform_drift']) + '.txt'
+        filename = '../data/mtploads/' + casename + '_mtploads_' + str(T) + '_u' + str(all_data['uniform_drift']) + '.txt'
     elif all_data['uniform2']:
-        filename = '../../cutplane/newmtploads2/' + casename + '_mtploads_' + str(T) + '_u2.txt'
+        filename = '../data/mtploads/' + casename + '_mtploads_' + str(T) + '_u2.txt'
     
     try:
         thefile = open(filename, "r")
@@ -2072,7 +1996,7 @@ def getrampr(log,all_data):
     
     casename = all_data['casename']
     T        = all_data['T']
-    filename = '../../cutplane/ramprates/' + casename + '_rampr_' + str(T) + '.txt'
+    filename = '../data/ramprates/' + casename + '_rampr_' + str(T) + '.txt'
     try:
         thefile = open(filename, "r")
         lines = thefile.readlines()

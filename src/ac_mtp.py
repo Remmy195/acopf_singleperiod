@@ -48,7 +48,7 @@ def goac_mtp(log,all_data):
     ampl.setOption('show_stats',2)
     ampl.setOption('solver',solver)    
 
-    log.joint(" solver set to " + solver + "\n")
+    log.joint("\n solver set to " + solver + "\n")
     
     if all_data['AMPL_presolve']:
         ampl.setOption('presolve',1)
@@ -69,12 +69,12 @@ def goac_mtp(log,all_data):
     
     ampl.eval(solver_options)
 
-
     if all_data['multistart']:
-        solver_options = "option knitro_options 'feastol_abs=1e-6 opttol_abs=1e-6 blasoptionlib=1 numthreads=20 linsolver=5 maxtime_real=2400 ms_enable=1 ms_numthreads=10 ms_maxsolves=5 ms_terminate =1';"
+        solver_options = "option knitro_options 'feastol_abs=" + feastol + " opttol_abs=" + opttol + " blasoptionlib=1 numthreads=40 linsolver=" + linsolver + " maxtime_real=" + max_time + " strat_warm_start=" + wstart + " bar_initmu=" + bar_initmu + " ms_enable=1 ms_numthreads=20 ms_maxsolves=4 ms_terminate =1';"
         ampl.eval(solver_options)
 
-    # Initial solution (flat-start or previously computed AC solutions)
+        
+    # Initial solution (flat-start or previously computed AC solution)
     Vinit_mtp, thetadiffinit_mtp = initial_solution_mtp(log,all_data)        
 
 
@@ -93,14 +93,16 @@ def goac_mtp(log,all_data):
 
     
     # Getting multi-time period loads and ramp rates from file
-    if all_data['T'] == 1:
-        Pd             = all_data['Pd'] = getloads_check(log,all_data)
-    else:
-        Pd             = all_data['Pd'] = getloads(log,all_data)
-        
+    Pd = all_data['Pd'] = getloads(log,all_data)        
     rampru, ramprd = getrampr(log,all_data)
 
-    
+    # debugger
+    # if all_data['T'] == 1:
+    #     Pd = all_data['Pd'] = getloads_check(log,all_data)
+    # else:
+    #     Pd = all_data['Pd'] = getloads(log,all_data)
+
+        
     for bus in all_data['buses'].values():
         buscount = bus.count
 
@@ -257,7 +259,7 @@ def goac_mtp(log,all_data):
     
     # Expand
     if all_data['expand']:
-        filename = casename + "_" + casetype + "_NLP.out"
+        filename = casename + "_" + casetype + "_acNLP.out"
         log.joint('Now expanding to %s.\n'%(filename))
         amplstate = 'expand; display {j in 1.._nvars} (_varname[j],_var[j].lb,_var[j].ub);' 
         modelout = ampl.getOutput(amplstate)
@@ -368,13 +370,12 @@ def goac_mtp(log,all_data):
         
 def writesol(log,all_data):
 
+    casetype     = all_data['casetype']    
     branches     = all_data['branches']
     buses        = all_data['buses']
     gens         = all_data['gens']
     IDtoCountmap = all_data['IDtoCountmap']
     T            = all_data['T']
-    tolerance    = 1e-05
-
     objvalue     = all_data['objvalue']
     vvalues      = all_data['vvalues']
     thetavalues  = all_data['thetavalues']
@@ -386,19 +387,12 @@ def writesol(log,all_data):
     Qtvalues     = all_data['Qtvalues']
     
 
-    datenow       = '_01_28_24'
-    
-    if all_data['uniform']:
-        filename      = 'ACsol_' + all_data['casename'] + '_T' + str(T) + '_u' + str(all_data['uniform_drift']) + '.txt'
-    elif all_data['uniform2']:
-        filename      = 'ACsol_' + all_data['casename'] + '_T' + str(T) + '_u2.txt'        
-    elif all_data['nperturb']:
-        filename      = 'ACsol_' + all_data['casename'] + '_T' + str(T) + '_n1.txt'
-
-    thefile       = open(filename,'w+')
+    filename = 'ACsol_' + all_data['casename'] + '_' + str(T) + '_' + casetype + '.txt'    
+    thefile  = open(filename,'w+')
 
     log.joint(' writing solution to ' + filename + '\n')
 
+    # Comment this if not running instance on cool1
     machinename    = "cool1"
     now            = time.time()
     AMPL_version   = 'Version 20231012'
@@ -467,13 +461,12 @@ def writesol(log,all_data):
 
 def writesol_qcqp_allvars(log,all_data):
 
-    branches      = all_data['branches']
-    buses         = all_data['buses']
-    gens          = all_data['gens']
-    IDtoCountmap  = all_data['IDtoCountmap']
-    T             = all_data['T']
-    tolerance     = 1e-05
-
+    casetype     = all_data['casetype']
+    branches     = all_data['branches']
+    buses        = all_data['buses']
+    gens         = all_data['gens']
+    IDtoCountmap = all_data['IDtoCountmap']
+    T            = all_data['T']
     objvalue     = all_data['objvalue']
     vvalues      = all_data['vvalues']
     thetavalues  = all_data['thetavalues']
@@ -486,18 +479,14 @@ def writesol_qcqp_allvars(log,all_data):
     Pd           = all_data['Pd']
 
 
-    datenow       = '_01_28_24'
 
-    if all_data['uniform']:
-        filenamevars      = 'ACsol_' + all_data['casename'] + '_T' + str(T) + '_u' + str(all_data['uniform_drift']) + '.sol'
-    elif all_data['uniform2']:
-        filenamevars      = 'ACsol_' + all_data['casename'] + '_T' + str(T) + '_u2.sol'        
-    elif all_data['nperturb']:
-        filenamevars      = 'ACsol_' + all_data['casename'] + '_T' + str(T) + '_n1.sol'                                                                                     
-    thefilevars   = open(filenamevars,'w+')
-    
+    filenamevars = 'ACsol_' + all_data['casename'] + '_' + str(T) + '_' + casetype + '.txt'    
+    thefilevars  = open(filenamevars,'w+')
+
     log.joint(' writing solution to ' + filenamevars + '\n')
 
+
+    # Comment this if not running instance on cool1
     machinename    = "cool1"
     now            = time.time()
     AMPL_version   = 'Version 20231012'
@@ -621,230 +610,6 @@ def writesol_qcqp_allvars(log,all_data):
     thefilevars.close()
 
 
-def topfg(log,all_data): #check this
-
-    topfg_name = 'top_flows_gens/' + all_data['casename'] + '_fg.txt' 
-    topfg      = open(topfg_name,"w")
-
-    topflows_f = sorted(dic_Pf.items(), key = lambda x: math.fabs(x[1]), reverse = True)[:10]
-    topflows_g = sorted(dic_Pt.items(), key = lambda x: math.fabs(x[1]), reverse = True)[:10]
-    topflows   = {}
-
-    branchid_f   = int(topflows_f[0][0])
-    flow_f       = topflows_f[0][1]
-    branchid_t   = int(topflows_g[0][0])
-    flow_t       = topflows_g[0][1]
-    i_f          = 0
-    i_t          = 0
-
-    while True:
-        if math.fabs(flow_f) >= math.fabs(flow_t):
-            topflows[branchid_f] = flow_f
-            if i_f == 9:
-                break
-            i_f         += 1
-            branchid_f   = int(topflows_f[i_f][0])
-            flow_f       = topflows_f[i_f][1]
-        else:
-            topflows[branchid_t] = flow_t
-            if i_t == 9:
-                break
-            i_t         += 1
-            branchid_t   = int(topflows_g[i_t][0])
-            flow_t       = topflows_g[i_t][1]
-
-
-    log.joint(' top 10 flows are:\n')
-    topfg.write(' top 10 flows are:\n')
-
-    for branchid in topflows.keys():
-        f          = all_data['branches'][branchid].f
-        t          = all_data['branches'][branchid].t
-        count_of_f = IDtoCountmap[f]
-        count_of_t = IDtoCountmap[t]
-        bus_f      = all_data['buses'][count_of_f]
-        bus_t      = all_data['buses'][count_of_t]
-
-        log.joint(' branch ' + str(branchid) + ' f ' + str(f) + ' t ' + str(t) + ' flow ' + str(topflows[branchid]) + ' fdegree ' + str(bus_f.degree) + ' tdegree ' + str(bus_t.degree) + '\n')
-        topfg.write(' branch ' + str(branchid) + ' f ' + str(f) + ' t ' + str(t) + ' flow ' + str(topflows[branchid]) + ' fdegree ' + str(bus_f.degree) + ' tdegree ' + str(bus_t.degree) + '\n')
-
-    top_active_gens  = dict(sorted(dic_Pg.items(), key = lambda x: x[1], reverse = True)[:10]) 
-
-    log.joint(' top 10 active power gens are:\n')
-    topfg.write(' top 10 active power gens are:\n')
-
-    for genid in top_active_gens.keys():
-        log.joint(' genid ' + str(int(genid)) + ' at bus ' + str(gens[genid]) + ' active power generation ' + str(top_active_gens[genid]) + '\n')
-        topfg.write(' genid ' + str(int(genid)) + ' at bus ' + str(gens[genid]) + ' active power generation ' + str(top_active_gens[genid]) + '\n')
-
-    top_reactive_gens  = dict(sorted(dic_Qg.items(), key = lambda x: x[1], reverse = True)[:10]) 
-
-    log.joint(' top 10 reactive power gens are:\n')
-    topfg.write(' top 10 reactive power gens are:\n')
-
-    for genid in top_reactive_gens.keys():
-        log.joint(' genid ' + str(int(genid)) + ' at bus ' + str(gens[genid]) + ' active power generation ' + str(top_reactive_gens[genid]) + '\n')
-        topfg.write(' genid ' + str(int(genid)) + ' at bus ' + str(gens[genid]) + ' active power generation ' + str(top_reactive_gens[genid]) + '\n')
-
-    topfg.close()
-    
-
-def readcuts(log,all_data):
-
-    branches     = all_data['branches']
-    buses        = all_data['buses']
-    IDtoCountmap = all_data['IDtoCountmap']
-    
-    if '_b' in all_data['casename']:
-        original_casename = all_data['casename'][:len(all_data['casename']) - 2]
-    elif ('_n_5_5' in all_data['casename'] or '_n_0_5' in all_data['casename'] 
-          or '_n_1_1' in all_data['casename']):
-        original_casename = all_data['casename'][:len(all_data['casename']) - 6]
-    elif '_line' in all_data['casename']:
-        original_casename = all_data['casename'][:len(all_data['casename']) - 5]
-    #elif '_line5' in all_data['casename']:
-    #    original_casename = all_data['casename'][:len(all_data['casename']) - 6]
-    else:
-        original_casename = all_data['casename']
-
-    filename = '../cuts/cuts_' + original_casename + '.txt' ###cuts | newcuts
-    log.joint(" opening file with cuts " + filename + "\n")
-
-    try:
-        thefile = open(filename, "r") 
-        lines = thefile.readlines()
-    except:
-        log.stateandquit(" cannot open file", filename)
-        sys.exit("failure")
-
-    numlines  = len(lines)
-    firstline = lines[1].split()
-    jabr      = 1
-    linenum   = 2
-
-    jabrs  = {}
-    i2s    = {}
-    limits = {}
-
-    while linenum < numlines: 
-        thisline = lines[linenum].split()
-        if thisline[0] == '#i2-envelope' and jabr:
-            numi2cuts = int(thisline[3])
-            all_data['addcuts_numi2cuts'] = numi2cuts
-            log.joint(' number of i2-envelope cuts = ' + str(numi2cuts) + '\n')
-            linenum += 1
-            jabr = 0
-            i2   = 1
-            continue
-
-        elif thisline[0] == '#limit-envelope' and i2:
-            numlimitcuts = int(thisline[3])
-            all_data['addcuts_numlimitcuts'] = numlimitcuts
-            log.joint(' number of limit-envelope cuts = ' + str(numlimitcuts) 
-                      + '\n')
-            linenum += 1
-            i2       = 0
-            continue
-
-        elif jabr:
-            branchid  = int(thisline[1])
-            f         = int(thisline[3])
-            t         = int(thisline[5])
-            cutid     = int(thisline[7])
-
-            if branchid not in branches.keys(): # perturbed lines
-                log.joint(' we do not add this cut since branch ' 
-                          + str(branchid) + ' f ' + str(f) + ' t ' + str(t) 
-                          + ' was turned OFF\n')
-                linenum += 1
-                continue
-
-            branch     = branches[branchid]
-            count_of_f = IDtoCountmap[f] 
-            count_of_t = IDtoCountmap[t]
-
-            if (branchid,f,t,branch.r) not in jabrs:
-                jabrs[(branchid,f,t,branch.r)] = 1
-            else:
-                jabrs[(branchid,f,t,branch.r)] += 1
-            
-            linenum += 1
-
-        elif (jabr == 0) and i2:
-
-            branchid   = int(thisline[1])
-            f          = int(thisline[3])
-            t          = int(thisline[5])
-            cutid      = int(thisline[7])
-
-            if branchid not in branches.keys(): # perturbed lines
-                log.joint(' we do not add this cut since branch ' 
-                          + str(branchid) + ' f ' + str(f) + ' t ' + str(t) 
-                          + 'was turned OFF\n')
-                linenum += 1
-                continue
-
-            branch     = branches[branchid]
-            count_of_f = IDtoCountmap[f] 
-            count_of_t = IDtoCountmap[t]
-
-            if (branchid,f,t,branch.r) not in i2s:
-                i2s[(branchid,f,t,branch.r)] = 1
-            else:
-                i2s[(branchid,f,t,branch.r)] += 1
-            
-            linenum += 1
-
-
-        elif (jabr == 0) and (i2 == 0):
-            branchid   = int(thisline[1])
-            f          = int(thisline[3])
-            t          = int(thisline[5])
-            cutid      = int(thisline[7])
-            if thisline[14] == 'Pft':
-                from_or_to = 'f'
-            elif thisline[14] == 'Ptf':
-                from_or_to = 't'
-            else:
-                log.joint(' look for a bug\n')
-                breakexit('bug')
-
-            if branchid not in branches.keys(): # perturbed lines
-                log.joint(' we do not add this cut since branch ' 
-                          + str(branchid) + ' f ' + str(f) + ' t ' + str(t) 
-                          + 'was turned OFF\n')
-                linenum += 1
-                continue
-
-            branch = branches[branchid]
-
-            if (branchid,f,t,branch.r) not in limits:
-                limits[(branchid,f,t,branch.r)] = 1
-            else:
-                limits[(branchid,f,t,branch.r)] += 1
-                
-            linenum += 1
-
-
-    numsel = 1000
-            
-    mostjabrs  = dict(sorted(jabrs.items(), key = lambda x: x[1], reverse = True)[:numsel])
-
-    mosti2     = dict(sorted(i2s.items(), key = lambda x: x[1], reverse = True)[:numsel])
-
-    mostlimits = dict(sorted(limits.items(), key = lambda x: x[1], reverse = True)[:numsel])
-
-    log.joint(' mostjabrs ' + str(mostjabrs) + '\n')
-    #log.joint(' mosti2s ' + str(mostjabrs) + '\n')
-    #log.joint(' mostlimits ' + str(mostjabrs) + '\n')
-
-    log.joint(' number of cones with Jabr-cuts ' + str(len(jabrs)) + '\n')
-
-    # num   = list(mostjabrs.keys())[0]
-    # count = 0
-    # numdic = {}
-    # for numcuts in mostjabrs.values():
-    #     if m
 
 def getloads(log,all_data):
 
@@ -852,11 +617,11 @@ def getloads(log,all_data):
     T        = all_data['T']
 
     if all_data['nperturb']:
-        filename = '../../cutplane/newmtploads2/' + casename + '_mtploads_' + str(T) + '_n1.txt'
+        filename = '../data/mtploads/' + casename + '_mtploads_' + str(T) + '_n1.txt'
     elif all_data['uniform']:
-        filename = '../../cutplane/newmtploads2/' + casename + '_mtploads_' + str(T) + '_u' + str(all_data['uniform_drift']) + '.txt'
+        filename = '../data/mtploads/' + casename + '_mtploads_' + str(T) + '_u' + str(all_data['uniform_drift']) + '.txt'
     elif all_data['uniform2']:
-        filename = '../../cutplane/newmtploads2/' + casename + '_mtploads_' + str(T) + '_u2.txt'
+        filename = '../data/mtploads/' + casename + '_mtploads_' + str(T) + '_u2.txt'
 
     try:
         thefile = open(filename, "r")
@@ -864,7 +629,7 @@ def getloads(log,all_data):
         lenlines = len(lines) - 1 # END                                                  
         thefile.close()
     except:
-        log.stateandquit("Cannot open file " + datafilename)
+        log.stateandquit("Cannot open file " + filename)
         sys.exit("Check file with loads")
 
     buses        = all_data['buses']
@@ -892,11 +657,11 @@ def getloads_check(log,all_data):
     T        = all_data['T'] + 3
 
     if all_data['nperturb']:
-        filename = '../../cutplane/newmtploads2/' + casename + '_mtploads_' + str(T) + '_n1.txt'
+        filename = '../data/mtploads/' + casename + '_mtploads_' + str(T) + '_n1.txt'
     elif all_data['uniform']:
-        filename = '../../cutplane/newmtploads2/' + casename + '_mtploads_' + str(T) + '_u' + str(all_data['uniform_drift']) + '.txt'
+        filename = '../data/mtploads/' + casename + '_mtploads_' + str(T) + '_u' + str(all_data['uniform_drift']) + '.txt'
     elif all_data['uniform2']:
-        filename = '../../cutplane/newmtploads2/' + casename + '_mtploads_' + str(T) + '_u2.txt'
+        filename = '../data/mtploads/' + casename + '_mtploads_' + str(T) + '_u2.txt'
 
     try:
         thefile = open(filename, "r")
@@ -904,7 +669,7 @@ def getloads_check(log,all_data):
         lenlines = len(lines) - 1 # END                                                  
         thefile.close()
     except:
-        log.stateandquit("Cannot open file " + datafilename)
+        log.stateandquit("Cannot open file " + filename)
         sys.exit("Check file with loads")
 
     buses        = all_data['buses']
@@ -918,12 +683,19 @@ def getloads_check(log,all_data):
         thisline = lines[linenum].split()
         buscount        = int(thisline[1])
         k               = int(thisline[5])
-        if k == 0:
+        if k == 1:
             load            = float(thisline[7]) 
             Pd[buscount,0]  = load
         linenum        += 1
 
-    log.joint(' Pd buscount ' + str(buscount) + ' is ' + str(Pd[buscount,0]) + '\n')
+    # debugger
+    #for buscount in all_data['buses'].keys():
+    #   load = Pd[buscount,0]
+    #   if load != 0:
+    #       log.joint(' Pd buscount ' + str(buscount) + ' is ' + str(Pd[buscount,0])
+    #                 + '\n')
+    #       break
+    
     log.joint(' done reading multi-period demands\n')        
     return  Pd
 
@@ -931,14 +703,14 @@ def getrampr(log,all_data):
 
     casename = all_data['casename']
     T        = all_data['T']
-    filename = '../../cutplane/ramprates/' + casename + '_rampr_' + str(T) + '.txt'
+    filename = '../data/ramprates/' + casename + '_rampr_' + str(T) + '.txt'
     try:
         thefile = open(filename, "r")
         lines = thefile.readlines()
         lenlines = len(lines) - 1 # END                                                      
         thefile.close()
     except:
-        log.stateandquit("Cannot open file " + datafilename)
+        log.stateandquit("Cannot open file " + filename)
         sys.exit("Check file with ramp rates")
 
     buses        = all_data['buses']

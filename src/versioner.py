@@ -15,4 +15,4 @@ import time
 from log import danoLogger
 
 def stateversion(log):
-    log.joint("Version <Wed.Jan.10.032300.2024@cool1>\n")
+    log.joint("Version <Wed.Apr.3.114200.2024@cool1>\n")
