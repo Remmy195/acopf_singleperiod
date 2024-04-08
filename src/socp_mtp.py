@@ -332,7 +332,7 @@ def gosocp_mtp(log,all_data):
     sumGenQ = 0
     for gencount,h in GenPvalues.keys():
         sumGenP += GenPvalues[gencount,h]
-        sumGenP += GenQvalues[gencount,h]
+        sumGenQ += GenQvalues[gencount,h]
         
     timesofar = time.time() - all_data['T0']        
 
@@ -1453,7 +1453,7 @@ def gosocp_mosek_mtp(log,all_data):
     sumGenQ = 0
     for gencount,h in GenPvalues.keys():
         sumGenP += GenPvalues[gencount,h]
-        sumGenP += GenQvalues[gencount,h]
+        sumGenQ += GenQvalues[gencount,h]
 
 
     timesofar = time.time() - all_data['T0']        
@@ -1917,7 +1917,7 @@ def gosocp2_mosek(log,all_data):
     sumGenQ = 0
     for gencount,h in GenPvalues.keys():
         sumGenP += GenPvalues[gencount,h]
-        sumGenP += GenQvalues[gencount,h]
+        sumGenQ += GenQvalues[gencount,h]
         
     timesofar = time.time() - all_data['T0']        
 

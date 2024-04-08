@@ -58,14 +58,24 @@ def goac_mtp(log,all_data):
         log.joint(' AMPL presolve off\n')
         
     # Solver options
-    feastol        = all_data['feastol']
-    opttol         = all_data['opttol']
+    feastol_abs    = all_data['feastol_abs']
+    opttol_abs     = all_data['opttol_abs']
+    feastol_rel    = all_data['feastol_rel']
+    opttol_rel     = all_data['opttol_rel']
+    honorbnds      = all_data['honorbnds']
+    ftol           = all_data['ftol']
+    scale          = all_data['scale']
+    ftol_iters     = all_data['ftol_iters']
     linsolver      = all_data['linsolver']
     max_time       = all_data['max_time']
     wstart         = all_data['wstart']
     bar_initmu     = all_data['bar_initmu']
+    blasoption     = all_data['blasoption']
+    linsolver_numthreads = all_data['linsolver_numthreads']
+    blas_numthreads      = all_data['blas_numthreads']
+    bar_murule           = all_data['bar_murule']
     
-    solver_options = "option knitro_options 'feastol_abs=" + feastol + " opttol_abs=" + opttol + " blasoptionlib=1 numthreads=20 linsolver=" + linsolver + " maxtime_real=" + max_time + " strat_warm_start=" + wstart + " bar_initmu=" + bar_initmu + "';"
+    solver_options = "option knitro_options 'feastol=" + feastol_rel + " feastol_abs=" + feastol_abs + " opttol=" + opttol_rel + " opttol_abs=" + opttol_abs + " ftol=" + ftol + " ftol_iters=" + ftol_iters + " honorbnds=" + honorbnds + " blasoption=" + blasoption + " blas_numthreads=" + blas_numthreads + " linsolver_numthreads=" + linsolver_numthreads + " numthreads=20 linsolver=" + linsolver + " maxtime_real=" + max_time + " strat_warm_start=" + wstart + " bar_murule=" + bar_murule + " bar_initmu=" + bar_initmu + "';"
     
     ampl.eval(solver_options)
 
@@ -349,10 +359,13 @@ def goac_mtp(log,all_data):
 
     summary_ac = open("summary_ac.log","a+")
 
-    summary_ac.write(' case ' + all_data['casename'] + ' modfile ' + all_data['modfile']
-                     + ' T ' + str(all_data['T']) + ' solver ' + all_data['solver'] + ' obj '
-                     + str(all_data['objvalue']) + ' runtime ' + str(timesofar) + '\n')
-
+    summary_ac.write(' case ' + all_data['casename'] + ' T ' + str(all_data['T'])
+                     + ' casetype ' + all_data['casetype']
+                     + ' modfile ' + all_data['modfile'] + ' solver ' + all_data['solver']
+                     + ' solver_status ' + str(solver_status)
+                     + ' obj ' + str(all_data['objvalue']) + ' runtime '
+                     + str(timesofar) + '\n')
+    
     summary_ac.close()
 
     log.joint(" ===============================================================\n")
@@ -387,7 +400,7 @@ def writesol(log,all_data):
     Qtvalues     = all_data['Qtvalues']
     
 
-    filename = 'ACsol_' + all_data['casename'] + '_' + str(T) + '_' + casetype + '.txt'    
+    filename = all_data['sols'] + 'ACsol_' + all_data['casename'] + '_' + str(T) + '_' + casetype + '.txt'    
     thefile  = open(filename,'w+')
 
     log.joint(' writing solution to ' + filename + '\n')
@@ -479,8 +492,7 @@ def writesol_qcqp_allvars(log,all_data):
     Pd           = all_data['Pd']
 
 
-
-    filenamevars = 'ACsol_' + all_data['casename'] + '_' + str(T) + '_' + casetype + '.txt'    
+    filenamevars = all_data['sols'] + 'ACsol_' + all_data['casename'] + '_' + str(T) + '_' + casetype + '.sol'    
     thefilevars  = open(filenamevars,'w+')
 
     log.joint(' writing solution to ' + filenamevars + '\n')

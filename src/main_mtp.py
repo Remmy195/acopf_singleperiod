@@ -44,12 +44,22 @@ def read_config(log, filename):
     writesol           = 0
 
     # Solver parameters
-    feastol            = "1e-6"
-    opttol             = "1e-6"
-    linsolver          = "5"
+    feastol_abs        = "1e-6"
+    feastol_rel        = "1e-6"    
+    opttol_abs         = "1e-6"
+    opttol_rel         = "1e-6"
+    scale              = "1"
+    ftol               = "1e-3"
+    ftol_iters         = "3"
+    honorbnds          = "0"
+    linsolver          = "6"
+    linsolver_numthreads = "10"
+    blas_numthreads    = "1"
+    blasoption         = "1"
     max_time           = "1800"
-    wstart             = '0'
-    bar_initmu         = '1e-1'
+    wstart             = "0"
+    bar_initmu         = "1e-1"
+    bar_murule         = "0"
     multistart         = 0
     
     T                  = 2
@@ -124,11 +134,17 @@ def read_config(log, filename):
             elif thisline[0] == 'AMPL_presolve':
                 AMPL_presolve = 1
 
-            elif thisline[0] == 'feastol':
-                feastol      = thisline[1]
+            elif thisline[0] == 'feastol_abs':
+                feastol_abs      = thisline[1]
 
-            elif thisline[0] == 'opttol':
-                opttol       = thisline[1]
+            elif thisline[0] == 'opttol_abs':
+                opttol_abs       = thisline[1]
+
+            elif thisline[0] == 'feastol_rel':
+                feastol_rel      = thisline[1]
+
+            elif thisline[0] == 'opttol_rel':
+                opttol_rel       = thisline[1]                
 
             elif thisline[0] == 'linsolver':
                 linsolver    = thisline[1]
@@ -164,7 +180,7 @@ def read_config(log, filename):
                 break
 
             else:
-                exit("illegal input " + thisline[0] + "bye")
+                exit("main_mtp: illegal input " + thisline[0] + "bye")
 
         linenum += 1
 
@@ -174,29 +190,39 @@ def read_config(log, filename):
     all_data['casename']           = casefilename.split('data/')[1].split('.m')[0]
     all_data['modfile']            = modfile.split('../modfiles/')[1]
     all_data['solver']             = solver
-    all_data['AMPL_presolve']      = AMPL_presolve
-    all_data['initial_solution']   = initial_solution
-    all_data['initial_solution_0'] = initial_solution_0    
-    all_data['fix_solution']       = fix_solution
-    all_data['fix_tolerance']      = fix_tolerance
-    all_data['bar_initmu']         = bar_initmu
-    all_data['multistart']         = multistart
-    all_data['writesol']           = writesol
-    all_data['T']                  = T
-    all_data['expand']             = expand
-    all_data['uniform2']           = uniform2
-    all_data['uniform']            = uniform
-    all_data['uniform_drift']      = uniform_drift    
-    all_data['nperturb']           = nperturb
-    all_data['feastol']            = feastol
-    all_data['opttol']             = opttol
-    all_data['linsolver']          = linsolver
-    all_data['max_time']           = max_time
-    all_data['wstart']             = wstart
-    all_data['ac']                 = ac
-    all_data['socp']               = socp
-    all_data['heuristic1']         = heuristic1
-    all_data['heuristic2']         = heuristic2    
+    all_data['AMPL_presolve']        = AMPL_presolve
+    all_data['initial_solution']     = initial_solution
+    all_data['initial_solution_0']   = initial_solution_0    
+    all_data['fix_solution']         = fix_solution
+    all_data['fix_tolerance']        = fix_tolerance
+    all_data['bar_initmu']           = bar_initmu
+    all_data['multistart']           = multistart
+    all_data['writesol']             = writesol
+    all_data['T']                    = T
+    all_data['expand']               = expand
+    all_data['uniform2']             = uniform2
+    all_data['uniform']              = uniform
+    all_data['uniform_drift']        = uniform_drift    
+    all_data['nperturb']             = nperturb
+    all_data['feastol_abs']          = feastol_abs
+    all_data['opttol_abs']           = opttol_abs
+    all_data['feastol_rel']          = feastol_rel
+    all_data['opttol_rel']           = opttol_rel
+    all_data['scale']                = scale
+    all_data['honorbnds']            = honorbnds
+    all_data['linsolver_numthreads'] = linsolver_numthreads
+    all_data['blasoption']           = blasoption
+    all_data['blas_numthreads']      = blas_numthreads
+    all_data['ftol']                 = ftol
+    all_data['ftol_iters']           = ftol_iters
+    all_data['bar_murule']           = bar_murule
+    all_data['linsolver']            = linsolver
+    all_data['max_time']             = max_time
+    all_data['wstart']               = wstart
+    all_data['ac']                   = ac
+    all_data['socp']                 = socp
+    all_data['heuristic1']           = heuristic1
+    all_data['heuristic2']           = heuristic2    
     
     
     casetype = ''
@@ -220,52 +246,77 @@ def read_config(log, filename):
 
 if __name__ == '__main__':
     if len(sys.argv) > 3 or len(sys.argv) < 2:
-        print ('Usage: main.py file.config [logfile]\n')
+        print ('Usage: main_mtp.py file.conf [sols]\n')
         exit(0)
 
     T0        = time.time()
-    mylogfile = "main.log"
 
-    if len(sys.argv) == 3:
-        mylogfile = sys.argv[2]
+    if len(sys.argv) == 3: # Directory where solutions and log will be saved
+        sols      = sys.argv[2] + '/'
+        mylogfile = sols + "main.log"
+    else:
+        sols      = ""        
+        mylogfile = "main.log"
 
+    
     log = danoLogger(mylogfile)
     stateversion(log)
 
-    all_data       = read_config(log,sys.argv[1])
-    all_data['T0'] = T0
+    all_data         = read_config(log,sys.argv[1])
+    all_data['T0']   = T0
+    all_data['sols'] = sols
     
     readcode = reader.readcase(log,all_data,all_data['casefilename'])
 
     if all_data['ac']:
-        all_data['solver'] = 'knitroampl'
+        all_data['solver']     = "knitroampl"
+        all_data['opttol_rel'] = "1e-3"
+        all_data['opttol_abs'] = "1e20"
+        all_data['honorbnds']  = "1"
+        all_data['scale']      = "0"
+        
         log.joint('\n==================================================='
                   + '===========================\n')
         log.joint('===================================================='
                   + '==========================\n')        
         log.joint('\n                  Initializing Multi-Time Period ACOPF\n')
         if all_data['heuristic1']:
-            all_data['modfile'] == 'ac_mtp.mod'
+            all_data['modfile'] = 'ac_mtp_definedvars.mod'
             log.joint('\n**Running Heuristic 1: We give to Knitro the '
                       + 'full Multi-Time Period Formulation\n')
+            log.joint(' feastol (rel/abs) = ' + str(all_data['feastol_rel']) + "/"
+                      + str(all_data['feastol_abs'])
+                      + ' opttol (rel/abs) = ' + str(all_data['opttol_rel']) + "/"
+                      + str(all_data['opttol_abs']) 
+                      + '\n')                        
             retcode = goac_mtp(log,all_data)
         elif all_data['heuristic2']:
-            all_data['modfile'] == 'ac.mod'
+            all_data['modfile'] = 'ac_definedvars.mod'
             log.joint('\n\nRunning Heuristic 2: We give to Knitro '
                       + 'one period at a time,\n')
             log.joint('and impose the ramping constraints using '
-                      + 'generation from t-1\n')            
+                      + 'generation from t-1\n')
+            log.joint(' feastol (rel/abs) = ' + str(all_data['feastol_rel']) + "/"
+                      + str(all_data['feastol_abs'])
+                      + ' opttol (rel/abs) = ' + str(all_data['opttol_rel']) + "/"
+                      + str(all_data['opttol_abs']) + "\n") 
+            log.joint (' max time (secs) per period ' + str(all_data['max_time'])
+                      + '\n')                        
             retcode = goac_mtp2(log,all_data)            
                
         # Set as default option when running MTP ACOPF
         else:
+            
             log.joint('\n**Running Heuristic 3: First we run H1. If '
                       + 'it fails, relax tolerances and run H2.\n')
-            log.joint(' feastol (abs) = ' + str(all_data['feastol'])
-                      + ' opttol (abs) = ' + str(all_data['opttol'])
-                      + ' max time (secs) ' + str(all_data['max_time'])
-                      + '\n')
-            all_data['modfile'] = 'ac_mtp.mod'
+            log.joint(' feastol (rel/abs) = ' + str(all_data['feastol_rel']) + "/"
+                      + str(all_data['feastol_abs'])
+                      + ' opttol (rel/abs) = ' + str(all_data['opttol_rel']) + "/"
+                      + str(all_data['opttol_abs']) + "\n")
+            log.joint("max time (secs) per period " + str(all_data['max_time'])
+                      + "\n")
+                      
+            all_data['modfile'] = 'ac_mtp_definedvars.mod'
             retcode  = goac_mtp(log,all_data)
             if retcode != 0:
                 log.joint('\n\nRunning Heuristic 2: We give to Knitro '
@@ -273,12 +324,15 @@ if __name__ == '__main__':
                 log.joint('and impose the ramping constraints using '
                           + 'generation from t-1\n')
                 log.joint(' We relax feasibility and optimality tolerances\n')
-                all_data['modfile']  = 'ac.mod'
+                all_data['modfile']  = 'ac_definedvars.mod'
                 all_data['max_time'] = "1200"
-                all_data['feastol']  = "1e-4"
-                all_data['opttol']   = "1e-4"
-                log.joint(' feastol (abs) = ' + str(all_data['feastol'])
-                          + ' opttol (abs) = ' + str(all_data['opttol'])
+                all_data['feastol_rel']  = "1e-4"
+                all_data['feastol_abs']  = "1e20"
+                all_data['bar_murule']   = "1"
+                log.joint(' feastol (rel/abs) = ' + str(all_data['feastol_rel']) + "/"
+                          + str(all_data['feastol_abs'])
+                          + ' opttol (rel/abs) = ' + str(all_data['opttol_rel']) + "/"
+                          + str(all_data['opttol_abs']) 
                           + ' max time (secs) per period ' + str(all_data['max_time'])
                           + '\n')
                 retcode = goac_mtp2(log,all_data)
@@ -294,6 +348,8 @@ if __name__ == '__main__':
             all_data['modfile'] = 'jabr_mosek_mtp.mod'
             retcode = gosocp_mosek_mtp(log,all_data)
         else:
+            all_data['honorbnds']  = "1"
+            all_data['scale']      = "0"            
             all_data['modfile'] = 'jabr_mtp.mod'
             retcode = gosocp_mtp(log,all_data)
     else:

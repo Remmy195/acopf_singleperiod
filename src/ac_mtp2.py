@@ -54,14 +54,25 @@ def goac_mtp2(log,all_data):
         log.joint(' AMPL presolve off\n')
         
     # Solver options
-    feastol        = all_data['feastol']
-    opttol         = all_data['opttol']
+    feastol_abs    = all_data['feastol_abs']
+    opttol_abs     = all_data['opttol_abs']
+    feastol_rel    = all_data['feastol_rel']
+    opttol_rel     = all_data['opttol_rel']
+    honorbnds      = all_data['honorbnds']
+    ftol           = all_data['ftol']
+    scale          = all_data['scale']
+    ftol_iters     = all_data['ftol_iters']
     linsolver      = all_data['linsolver']
     max_time       = all_data['max_time']
     wstart         = all_data['wstart']
     bar_initmu     = all_data['bar_initmu']
+    blasoption     = all_data['blasoption']
+    linsolver_numthreads = all_data['linsolver_numthreads']
+    blas_numthreads      = all_data['blas_numthreads']
+    bar_murule           = all_data['bar_murule']
     
-    solver_options = "option knitro_options 'feastol_abs=" + feastol + " opttol_abs=" + opttol + " blasoptionlib=1 numthreads=20 linsolver=" + linsolver + " maxtime_real=" + max_time + " strat_warm_start=" + wstart + " bar_initmu=" + bar_initmu + "';"
+    solver_options = "option knitro_options 'feastol=" + feastol_rel + " feastol_abs=" + feastol_abs + " opttol=" + opttol_rel + " opttol_abs=" + opttol_abs + " ftol=" + ftol + " ftol_iters=" + ftol_iters + " honorbnds=" + honorbnds + " blasoption=" + blasoption + " blas_numthreads=" + blas_numthreads + " linsolver_numthreads=" + linsolver_numthreads + " numthreads=20 linsolver=" + linsolver + " maxtime_real=" + max_time + " strat_warm_start=" + wstart + " bar_murule=" + bar_murule + " bar_initmu=" + bar_initmu + "';"
+    
     
     ampl.eval(solver_options)
     
@@ -249,6 +260,8 @@ def goac_mtp2(log,all_data):
     datastruct_acsolutions(log,all_data)
 
     # Main loop
+    objvalue = 0
+    
     for k in range(T):
 
         # Setting up active-power demand and initial voltages
@@ -292,6 +305,14 @@ def goac_mtp2(log,all_data):
             outfile.write("model = " + str(modelout) + "\n")
             outfile.close()
 
+        # Reset variables for flat start
+        amplstate='reset data v; reset data thetadiff;'
+        ampl.eval(amplstate)        
+        
+        amplstate='for {i in buses}{ let v[i] := 1; };'
+        ampl.eval(amplstate)
+        amplstate='for {i in branches}{ let thetadiff[i] := 0; };'        
+        ampl.eval(amplstate)            
             
         # Solve
         log.joint(" solving model ...\n")
@@ -301,9 +322,10 @@ def goac_mtp2(log,all_data):
 
         
         # Updating Knitro options
-        bar_initmu = '1e-2'
-        options   = "option knitro_options 'feastol_abs=" + feastol + " opttol_abs=" + opttol + " blasoptionlib=1 numthreads=20 linsolver=" + linsolver + " maxtime_real=" + max_time + " strat_warm_start=" + wstart + " bar_initmu=" + bar_initmu + "';"
-        ampl.eval(options)
+        bar_initmu = "1e-2"
+        solver_options = "option knitro_options 'feastol=" + feastol_rel + " feastol_abs=" + feastol_abs + " opttol=" + opttol_rel + " opttol_abs=" + opttol_abs + " ftol=" + ftol + " ftol_iters=" + ftol_iters + " honorbnds=" + honorbnds + " blasoption=" + blasoption + " blas_numthreads=" + blas_numthreads + " linsolver_numthreads=" + linsolver_numthreads + " numthreads=20 linsolver=" + linsolver + " maxtime_real=" + max_time + " strat_warm_start=" + wstart + " bar_murule=" + bar_murule + " bar_initmu=" + bar_initmu + "';"
+        #options   = "option knitro_options 'feastol_abs=" + feastol_abs + " opttol_abs=" + opttol_abs + " blasoptionlib=1 numthreads=20 linsolver=" + linsolver + " maxtime_real=" + max_time + " strat_warm_start=" + wstart + " bar_initmu=" + bar_initmu + "';"
+        ampl.eval(solver_options)
 
 
         log.joint("\n ===============================================================\n")
@@ -380,24 +402,28 @@ def goac_mtp2(log,all_data):
         log.joint(" reactive power loss " + str(sumQLoss) + '\n')
         log.joint(" solver runtime " + str(t1-t0) + '\n')
         log.joint(" time so far " + str(timesofar) + '\n')
-            
-        log.joint(" writing casename, modfile, obj and runtime to summary_ac.log\n")
+
 
         summary_ac = open("summary_ac.log","a+")
-
-        summary_ac.write(' case ' + all_data['casename'] + ' modfile ' + all_data['modfile']
-                         + ' solver ' + all_data['solver'] + ' obj ' + str(all_data['objvalue'])
-                         + ' runtime ' + str(timesofar) + '\n')
-
+        
+        #if all_data['solver_status'][k] != 0:
+        #    log.joint(' No feasible solution, H2 unsuccesful\n')
+        #    break
+        #else:
+            
+        objvalue += all_data['objvalue'][k]
+        log.joint(" writing casename, modfile, obj and runtime to summary_ac.log\n")
+        summary_ac.write(' case ' + all_data['casename'] + ' casetype ' + all_data['casetype']
+                         + ' modfile ' + all_data['modfile'] + ' solver ' + all_data['solver']
+                         + ' solver_status ' + str(all_data['solver_status'].values())
+                         + ' obj ' + str(all_data['objvalue'][k]) + ' runtime ' + str(timesofar)
+                         + '\n')
         summary_ac.close()
 
         
         log.joint(" ===============================================================\n")
         log.joint(" ===============================================================\n")
 
-        #if all_data['solver_status'][k] != 0:
-        #    log.joint(' No feasible solution, H2 unsuccesful\n')
-        #    exit(0)
         
         # Updating Pmax and Pmin for next time-period
         log.joint(' Updating Pmax and Pmin for next time-period\n')
@@ -423,7 +449,6 @@ def goac_mtp2(log,all_data):
     log.joint("\n\n ===============================================================\n")
     log.joint(" ===============================================================\n")
         
-    objvalue = sum(all_data['objvalue'].values())
     sumPd    = sum(all_data['sumPd'].values())
     sumQd    = sum(all_data['sumQd'].values())    
     sumPLoss = sum(all_data['sumPLoss'].values())
@@ -433,6 +458,13 @@ def goac_mtp2(log,all_data):
     status   = sum(all_data['solver_status'].values())
     
     timesofar = time.time() - all_data['T0']
+
+    if status != 0:
+        status   = ""
+        for k in range(len(all_data['solver_status'])):
+            status += str(all_data['solver_status'][k]) + " "
+    else:
+        status = "0 "
         
     log.joint(' case ' + casename + ' sum of ' + str(T) + ' periods '
               + casetype + '\n')
@@ -445,12 +477,7 @@ def goac_mtp2(log,all_data):
         log.joint(" solver " + all_data['solver']
                   + " warmstart "
                   + str(all_data['wstart'])
-                  + " list of error codes:\n")
-        for k in range(T):
-            log.joint(' t ' + str(k) + ' code '
-                      + str(all_data['solver_status'][k])
-                      + ' ')
-        log.joint('\n')
+                  + " list of error codes: " + status + "\n")
     log.joint(" objective " + str(objvalue) + '\n')        
     log.joint(" modfile " + all_data['modfile'] + "\n")
     log.joint(" active power generation " + str(sumGenP) + '\n')
@@ -468,18 +495,20 @@ def goac_mtp2(log,all_data):
     log.joint(" writing casename, modfile, obj and runtime to summary_ac.log\n")
 
     summary_ac = open("summary_ac.log","a+")
-
-    summary_ac.write(' case ' + all_data['casename'] + ' modfile ' + all_data['modfile']
-                     + ' solver ' + all_data['solver'] + ' obj ' + str(objvalue)
-                     + ' runtime ' + str(timesofar) + '\n')
-
+    
+    summary_ac.write(' case ' + all_data['casename'] + ' T ' + str(all_data['T'])
+                     + ' casetype ' + all_data['casetype']
+                     + ' modfile ' + all_data['modfile'] + ' solver ' + all_data['solver']
+                     + ' solver_status ' + status + ' obj ' + str(objvalue) + ' runtime '
+                     + str(timesofar) + '\n')
+    
     summary_ac.close()
 
     if all_data['writesol']:
         writesol(log,all_data)
         writesol_qcqp_allvars(log,all_data)
  
-    if status == 0:
+    if status == "0 ":
         return 0
     else:
         return 1
@@ -502,9 +531,8 @@ def writesol(log,all_data):
     T            = all_data['T']
     casetype     = all_data['casetype']
 
-    datenow       = '_01_28_24'
-    filename      = 'ACsol_' + all_data['casename'] + '_' + str(T) + '_' + casetype + '.txt'
-    #filename      = 'ACsols' + datenow + '/ACsol_' + all_data['casename'] + '.txt'    
+
+    filename      = all_data['sols'] + 'ACsol_' + all_data['casename'] + '_' + str(T) + '_' + casetype + '.txt'
     thefile       = open(filename,'w+')
 
     log.joint('\n writing solution to ' + filename + '\n')
@@ -594,9 +622,8 @@ def writesol_qcqp_allvars(log,all_data):
     T             = all_data['T']
     casetype      = all_data['casetype']
     
-    datenow       = '_01_28_24'
-    filenamevars  = 'ACsol_' + all_data['casename'] + '_' + str(T) + '_' + casetype + '.sol'
-    #filenamevars  = 'ACsols' + datenow + '/ACsol_' + all_data['casename'] + '.sol'
+
+    filenamevars  = all_data['sols'] + 'ACsol_' + all_data['casename'] + '_' + str(T) + '_' + casetype + '.sol'
     thefilevars   = open(filenamevars,'w+')
     
     log.joint('\n writing solution to ' + filenamevars + '\n')
@@ -741,9 +768,7 @@ def writesol_k(log,all_data,k):
     T            = all_data['T']
     casetype     = all_data['casetype']
 
-    datenow       = '_01_28_24'
-    filename      = 'ACsol_' + all_data['casename'] + '_' + str(k) + '_' + str(T) + '_' + casetype + '.txt'
-    #filename      = 'ACsols' + datenow + '/ACsol_' + all_data['casename'] + '.txt'    
+    filename      = all_data['sols'] + 'ACsol_' + all_data['casename'] + '_' + str(k) + '_' + str(T) + '_' + casetype + '.txt'
     thefile       = open(filename,'w+')
 
     log.joint('\n writing solution to ' + filename + '\n')
@@ -830,9 +855,7 @@ def writesol_qcqp_allvars_k(log,all_data,k):
     T             = all_data['T']
     casetype      = all_data['casetype']
     
-    datenow       = '_01_28_24'
-    filenamevars  = 'ACsol_' + all_data['casename'] + '_' + str(k) + '_' + str(T) + '_' + casetype + '.sol'
-    #filenamevars  = 'ACsols' + datenow + '/ACsol_' + all_data['casename'] + '.sol'
+    filenamevars  = all_data['sols'] + 'ACsol_' + all_data['casename'] + '_' + str(k) + '_' + str(T) + '_' + casetype + '.sol'
     thefilevars   = open(filenamevars,'w+')
     
     log.joint('\n writing solution to ' + filenamevars + '\n')
