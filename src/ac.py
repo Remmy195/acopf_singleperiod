@@ -18,6 +18,8 @@ import time
 import math
 import os
 import platform
+import socket
+import psutil
 
 def goac(log,all_data):
 
@@ -56,8 +58,13 @@ def goac(log,all_data):
     elif all_data['knitropresolveoff']:
         ampl.eval("option knitro_options 'presolve=0';")            
     else:
-        ampl.eval("option knitro_options 'blasoptionlib=1 numthreads=20 linsolver=7 maxtime_real=1000';") 
-                
+        # Only add bar_murule when using algorithm 1 (Interior-Direct) or 6 (Augmented Lagrangian)
+        algorithm = all_data.get("knitro_algorithm", 1)  # default to 1 if not set
+        if algorithm in (1, 6):
+            ampl.eval(f"option knitro_options 'algorithm={algorithm} bar_murule=1 blasoptionlib=1 numthreads=20 linsolver=7 maxtime_real=1000';")
+        else:
+            ampl.eval(f"option knitro_options 'algorithm={algorithm} blasoptionlib=1 numthreads=20 linsolver=7 maxtime_real=1000';")
+                 
 
     if all_data['fix'] or all_data['initial_point']:
         getsol(log,all_data)
@@ -370,22 +377,32 @@ def writesol(log,all_data):
     Qfvalues     = all_data['Qfvalues']
     Qtvalues     = all_data['Qtvalues']
     
-
-    datenow       = '_01_28_24'
+    ampl = AMPL()
     filename      = 'ACsol_' + all_data['casename'] + '.txt'
-    #filename      = 'ACsols' + datenow + '/ACsol_' + all_data['casename'] + '.txt'    
     thefile       = open(filename,'w+')
 
     log.joint(' writing solution to ' + filename + '\n')
 
-    machinename    = "cool1"
+    machinename    = socket.gethostname()
     now            = time.time()
-    AMPL_version   = 'Version 20231012'
-    solver_version = 'Artelys Knitro 13.2.0'
-    opsystem       = 'Fedora 34 (Workstation Edition)'
-    processor      = 'Intel(R) Xeon(R) Linux64 CPU E5-2687W v3 3.10GHz'
+    full_text      = ampl.get_option("version")
+    AMPL_version   = full_text.splitlines()[0]
+    if all_data['solver'] == 'knitro':
+        solver_version = 'Artelys Knitro 13.2.0'
+    elif all_data['solver'] == 'gurobi':
+        solver_version = 'Gurobi 12.0.2'
+    elif all_data['solver'] == 'mosek':
+        solver_version = 'MOSEK 10.0.43'
+    opsystem       = f"{platform.system()} {platform.release()} ({platform.platform()})"
+    processor      = platform.processor() or platform.machine()
     cores          = '20 physical cores, 40 logical processors'
-    ram            = '256 GB RAM'
+    try:
+        ram_gb = f"{round(psutil.virtual_memory().total / (1024**3))} GB"
+        cores = f"{psutil.cpu_count(logical=False)} physical cores, {psutil.cpu_count(logical=True)} logical processors"
+    except ImportError:
+        ram_gb = "Unknown RAM"
+        cores = f"{os.cpu_count()} cores"
+    ram            = ram_gb
     
     
     thefile.write('/ACsolution : ' + all_data['casename'] + '\n')
@@ -395,7 +412,7 @@ def writesol(log,all_data):
     thefile.write('/OS : ' + opsystem + '\n')
     thefile.write('/Cores : ' + cores + '\n')
     thefile.write('/RAM : ' + ram + '\n')
-    thefile.write('/AMPL : ' + AMPL_version + '\n')
+    thefile.write(AMPL_version + '\n')
     thefile.write('/Solver : ' + solver_version + '\n')
     thefile.write('objvalue ' + str(all_data['objvalue']) + '\n')
     
@@ -460,21 +477,32 @@ def writesol_qcqp_allvars(log,all_data):
     Qtvalues     = all_data['Qtvalues']
 
 
-    datenow       = '_01_28_24'
+    ampl = AMPL()
     filenamevars  = 'ACsol_' + all_data['casename'] + '.sol'    
-    #filenamevars  = 'ACsols' + datenow + '/ACsol_' + all_data['casename'] + '.sol'
     thefilevars   = open(filenamevars,'w+')
     
     log.joint(' writing solution to ' + filenamevars + '\n')
 
-    machinename    = "cool1"
+    machinename    = socket.gethostname()
     now            = time.time()
-    AMPL_version   = 'Version 20231012'
-    solver_version = 'Artelys Knitro 13.2.0'
-    opsystem       = 'Fedora 34 (Workstation Edition)'
-    processor      = 'Intel(R) Xeon(R) Linux64 CPU E5-2687W v3 3.10GHz'
+    full_text      = ampl.get_option("version")
+    AMPL_version   = full_text.splitlines()[0]
+    if all_data['solver'] == 'knitro':
+        solver_version = 'Artelys Knitro 13.2.0'
+    elif all_data['solver'] == 'gurobi':
+        solver_version = 'Gurobi 12.0.2'
+    elif all_data['solver'] == 'mosek':
+        solver_version = 'MOSEK 10.0.43'
+    opsystem       = f"{platform.system()} {platform.release()} ({platform.platform()})"
+    processor      = platform.processor() or platform.machine()
     cores          = '20 physical cores, 40 logical processors'
-    ram            = '256 GB RAM'
+    try:
+        ram_gb = f"{round(psutil.virtual_memory().total / (1024**3))} GB"
+        cores = f"{psutil.cpu_count(logical=False)} physical cores, {psutil.cpu_count(logical=True)} logical processors"
+    except ImportError:
+        ram_gb = "Unknown RAM"
+        cores = f"{os.cpu_count()} cores"
+    ram            = ram_gb
     
     thefilevars.write('/ACsolution : ' + all_data['casename'] + '\n')
     thefilevars.write('/Date : ' + str(time.strftime('%m-%d-%Y %H:%M:%S %Z', time.localtime(now))) + '\n')
@@ -483,7 +511,7 @@ def writesol_qcqp_allvars(log,all_data):
     thefilevars.write('/OS : ' + opsystem + '\n')
     thefilevars.write('/Cores : ' + cores + '\n')
     thefilevars.write('/RAM : ' + ram + '\n')
-    thefilevars.write('/AMPL : ' + AMPL_version + '\n')
+    thefilevars.write(AMPL_version + '\n')
     thefilevars.write('/Solver : ' + solver_version + '\n')
     thefilevars.write('/Objvalue : ' + str(all_data['objvalue']) + '\n')
     
@@ -658,7 +686,7 @@ def getsol_knitro(log,all_data):
 
     casefilename  = all_data['casename'] 
     #filename      = 'ksol_' + casename + '.txt'
-    filename      = 'ksol_' + casename + '.txt'
+    filename      = 'ksol_' + casefilename + '.txt'
     print(filename)
     
     try:

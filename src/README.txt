@@ -19,7 +19,7 @@ Quick guide on how to run the scripts:
    below);
 1.3) If "heuristic1" is given, the script runs heuristic1,
    if "heuristic2" is given, then it runs heuristic2.
-2) In 'runs', type 'python ../src/main_mtp.py ac_mpt.conf'
+2) In 'runs', type 'python ../src/main_mtp.py ac_mtp.conf'
 Some heuristics for finding AC primal bounds using Knitro:
 
 heuristic1: We give to Knitro the full Multi-Time Period Formulation
@@ -34,7 +34,7 @@ heuristic3: First we run heuristic1. If it fails, relax tolerances and
 1.1) Provide the casefilename of the instance;
 1.2) Provide the string 'socp' to run the Jabr SOCP
 1.3) Provide the string "solver " + "<solvername>"
-2) In 'runs', type 'python ../src/main_mtp.py ac_mpt.conf'
+2) In 'runs', type 'python ../src/main_mtp.py ac_mtp.conf'
 
 Currently, the data provided corresponds to 4 time periods (c.f. directories
 /data/ramprates and /data/mtploads) and a small number of instances from

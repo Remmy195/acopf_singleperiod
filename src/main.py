@@ -35,14 +35,17 @@ def read_config(log, filename):
 
     casefilename      = 'NONE'
     modfile           = 'NONE'
-    solver            = 'knitroampl'
+    solver            = 'knitro'
     fix               = 0
     fix_point         = 0
     initial_point     = 0
     multistart        = 0
     mytol             = 0
     writesol          = 0
-    
+    knitro_algorithm = 1         # default to Interior-Direct
+    knitro_bar_murule = None
+    knitropresolveoff = 0
+
     linenum       = 0
     
     while linenum < len(lines):
@@ -78,7 +81,16 @@ def read_config(log, filename):
 
             elif thisline[0] == 'writesol':
                 writesol    = 1                                
-                
+
+            elif thisline[0] == 'knitropresolveoff':
+                knitropresolveoff = 1
+
+            elif thisline[0] == 'knitro_algorithm':
+                knitro_algorithm = int(thisline[1])
+
+            elif thisline[0] == 'knitro_bar_murule':
+                knitro_bar_murule = int(thisline[1])
+
             elif thisline[0] == 'END':
                 break
 
@@ -97,7 +109,10 @@ def read_config(log, filename):
     all_data['fix']               = fix
     all_data['multistart']        = multistart
     all_data['mytol']             = mytol
-    all_data['writesol']          = writesol    
+    all_data['writesol']          = writesol
+    all_data['knitropresolveoff'] = knitropresolveoff    
+    all_data['knitro_algorithm']  = knitro_algorithm
+    all_data['knitro_bar_murule'] = knitro_bar_murule
     
     return all_data
 
@@ -121,15 +136,15 @@ if __name__ == '__main__':
     readcode = reader.readcase(log,all_data,all_data['casefilename'])
 
     if all_data['modfile'] == 'ac.mod' or all_data['modfile'] == 'ac2.mod':
-        if all_data['solver'] != 'knitroampl':
+        s = all_data['solver'].lower()
+        if not (s.startswith('knitro') or s.startswith('baron') or s.startswith('ipopt') or s.startswith('gurobi')):
             log.joint('Wrong solver/modfile, please check config file\n')
             exit(1)
-        else:
-            goac(log,all_data)
-        
-    elif all_data['modfile'] == 'jabr.mod':
+        goac(log,all_data)
+
+    elif all_data['modfile'] == 'acopfqcqp.mod' or all_data['modfile'] == 'jabr.mod':
         if all_data['solver'] != 'mosek':
-            gosocp(log,all_data)
+            gosocp(log, all_data)
         else:
             log.joint('Wrong solver/modfile, please check config file\n')
             exit(1)

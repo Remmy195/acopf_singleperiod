@@ -18,6 +18,8 @@ import time
 import math
 import os
 import platform
+import socket
+import psutil
 
 def gosocp(log,all_data):
 
@@ -59,7 +61,12 @@ def gosocp(log,all_data):
         elif all_data['knitropresolveoff']:
             ampl.eval("option knitro_options 'presolve=0';")       
         else:
-            ampl.eval("option knitro_options 'blasoptionlib=1 numthreads=20 linsolver=7 maxtime_real=1000';") 
+            # Only add bar_murule when using algorithm 1 (Interior-Direct) or 6 (Augmented Lagrangian)
+            algorithm = all_data.get("knitro_algorithm", 1)  # default to 1 if not set
+            if algorithm in (1, 6):
+                ampl.eval(f"option knitro_options 'algorithm={algorithm} bar_murule=1 blasoptionlib=1 numthreads=20 linsolver=7 maxtime_real=1000';")
+            else:
+                ampl.eval(f"option knitro_options 'algorithm={algorithm} blasoptionlib=1 numthreads=20 linsolver=7 maxtime_real=1000';")
 
 
     if all_data['fix_point']:
@@ -448,10 +455,10 @@ def writesol(log,all_data):
     Qfvalues     = all_data['Qfvalues']
     Qtvalues     = all_data['Qtvalues']
 
+    ampl = AMPL()
+
     if all_data['modfile'] == 'i2.mod' or all_data['modfile'] == 'i2_mosek.mod':
         i2fvalues = all_data['i2fvalues']
-
-    datenow       = '_01_28_24'
         
     if all_data['modfile'] == 'jabr.mod' or all_data['modfile'] == 'jabr_mosek.mod':
         if all_data['solver'] == 'knitroampl':
@@ -473,32 +480,50 @@ def writesol(log,all_data):
         elif all_data['solver'] == 'mosek':
             filename      = 'I2sol_mosek_' + all_data['casename'] + '.txt'
             #filename      = 'SOCPsols' + datenow + '/I2sol_mosek_' + all_data['casename'] + '.txt'            
+    elif all_data['modfile'] == 'acopfqcqp.mod':
+        if all_data['solver'] == 'knitro':
+            filename      = 'ACQCQPsol_knitro_' + all_data['casename'] + '.txt'
+            #filename      = 'SOCPsols' + datenow + '/ACQCQPsol_knitro_' + all_data['casename'] + '.txt'                               
+        elif all_data['solver'] == 'gurobi':
+            filename      = 'ACQCQPsol_gurobi_' + all_data['casename'] + '.txt'
+            #filename      = 'SOCPsols' + datenow + '/ACQCQPsol_gurobi_' + all_data['casename'] + '.txt'                        
+        elif all_data['solver'] == 'mosek':
+            filename      = 'ACQCQPsol_mosek_' + all_data['casename'] + '.txt'
+            #filename      = 'SOCPsols' + datenow + '/ACQCQPsol_mosek_' + all_data['casename'] + '.txt'
 
                 
     thefile       = open(filename,'w+')
 
     log.joint(' writing solution to ' + filename + '\n')
 
-    machinename    = "cool1"
-    now            = time.time()
-    AMPL_version   = 'Version 20231012'
 
-    if all_data['solver'] == 'knitroampl':
+    machinename    = socket.gethostname()
+    now            = time.time()
+    full_text      = ampl.get_option("version")
+    AMPL_version   = full_text.splitlines()[0]
+    if all_data['solver'] == 'knitro':
         solver_version = 'Artelys Knitro 13.2.0'
-    elif all_data['solver'] == 'gurobi_ampl':
-        solver_version = 'Gurobi 10.0.1'
+    elif all_data['solver'] == 'gurobi':
+        solver_version = 'Gurobi 12.0.2'
     elif all_data['solver'] == 'mosek':
         solver_version = 'MOSEK 10.0.43'
-        
-    opsystem       = 'Fedora 34 (Workstation Edition)'
-    processor      = 'Intel(R) Xeon(R) Linux64 CPU E5-2687W v3 3.10GHz'
-    cores          = '20 physical cores, 40 logical processors'
-    ram            = '256 GB RAM'
+    opsystem       = f"{platform.system()} {platform.release()} ({platform.platform()})"
+    processor      = platform.processor() or platform.machine()
+    try:
+        ram_gb = f"{round(psutil.virtual_memory().total / (1024**3))} GB"
+        cores = f"{psutil.cpu_count(logical=False)} physical cores, {psutil.cpu_count(logical=True)} logical processors"
+    except ImportError:
+        ram_gb = "Unknown RAM"
+        cores = f"{os.cpu_count()} cores"
+    ram            = ram_gb
+
 
     if all_data['modfile'] == 'jabr.mod' or all_data['modfile'] == 'jabr_mosek.mod':
         thefile.write('/JABRsolution : ' + all_data['casename'] + '\n')
     elif all_data['modfile'] == 'i2.mod' or all_data['modfile'] == 'i2_mosek.mod':
         thefile.write('/I2solution : ' + all_data['casename'] + '\n')
+    elif all_data['modfile'] == 'acopfqcqp.mod':
+        thefile.write('/ACQCQPsolution : ' + all_data['casename'] + '\n')
     
     thefile.write('/Date : ' + str(time.strftime('%m-%d-%Y %H:%M:%S %Z', time.localtime(now))) + '\n')
     thefile.write('/MachineName : ' + machinename + '\n')
@@ -506,7 +531,7 @@ def writesol(log,all_data):
     thefile.write('/OS : ' + opsystem + '\n')
     thefile.write('/Cores : ' + cores + '\n')
     thefile.write('/RAM : ' + ram + '\n')
-    thefile.write('/AMPL : ' + AMPL_version + '\n')
+    thefile.write(AMPL_version + '\n')
     thefile.write('/Solver : ' + solver_version + '\n')
     thefile.write('objvalue ' + str(all_data['objvalue']) + '\n')
     
@@ -541,7 +566,7 @@ def writesol(log,all_data):
             line = 'branch ' + str(branchid) + ' f ' + str(f) + ' t ' + str(t) + ' Pft ' + str(Pfval) + ' Ptf ' + str(Ptval) + ' Qft ' + str(Qfval) + ' Qtf ' + str(Qtval) + ' cft ' + str(cftval) + ' sft ' + str(sftval) + ' i2ft ' + str(i2fval) + '\n'
         else:
             line = 'branch ' + str(branchid) + ' f ' + str(f) + ' t ' + str(t) + ' Pft ' + str(Pfval) + ' Ptf ' + str(Ptval) + ' Qft ' + str(Qfval) + ' Qtf ' + str(Qtval) + ' cft ' + str(cftval) + ' sft ' + str(sftval) + '\n'
-        
+
         thefile.write(line)
 
     thefile.write('generation:\n')
@@ -577,6 +602,7 @@ def writesol_allvars(log,all_data):
     Qfvalues     = all_data['Qfvalues']
     Qtvalues     = all_data['Qtvalues']
 
+    ampl = AMPL()
 
     if all_data['modfile'] == 'i2.mod' or all_data['modfile'] == 'i2_mosek.mod':
         i2fvalues = all_data['i2fvalues']
@@ -604,33 +630,48 @@ def writesol_allvars(log,all_data):
         elif all_data['solver'] == 'mosek':
             filename      = 'I2sol_mosek_' + all_data['casename'] + '.sol'
             #filename      = 'SOCPsols' + datenow + '/I2sol_mosek_' + all_data['casename'] + '.sol'            
-        
+    elif all_data['modfile'] == 'acopfqcqp.mod':
+        if all_data['solver'] == 'knitro':
+            filename      = 'ACQCQPsol_knitro_' + all_data['casename'] + '.sol'
+            #filename      = 'SOCPsols' + datenow + '/ACQCQPsol_knitro_' + all_data['casename'] + '.txt'                               
+        elif all_data['solver'] == 'gurobi':
+            filename      = 'ACQCQPsol_gurobi_' + all_data['casename'] + '.sol'
+            #filename      = 'SOCPsols' + datenow + '/ACQCQPsol_gurobi_' + all_data['casename'] + '.txt'                        
+        elif all_data['solver'] == 'mosek':
+            filename      = 'ACQCQPsol_mosek_' + all_data['casename'] + '.sol'
+            #filename      = 'SOCPsols' + datenow + '/ACQCQPsol_mosek_' + all_data['casename'] + '.txt'
     
     thefilevars   = open(filename,'w+')
 
 
     log.joint(' writing solution to ' + filename + '\n')
     
-    machinename    = "cool1"
+    machinename    = socket.gethostname()
     now            = time.time()
-    AMPL_version   = 'Version 20231012'
-
-    if all_data['solver'] == 'knitroampl':
+    full_text      = ampl.get_option("version")
+    AMPL_version   = full_text.splitlines()[0]
+    if all_data['solver'] == 'knitro':
         solver_version = 'Artelys Knitro 13.2.0'
-    elif all_data['solver'] == 'gurobi_ampl':
-        solver_version = 'Gurobi 10.0.1'
+    elif all_data['solver'] == 'gurobi':
+        solver_version = 'Gurobi 12.0.2'
     elif all_data['solver'] == 'mosek':
         solver_version = 'MOSEK 10.0.43'
-        
-    opsystem       = 'Fedora 34 (Workstation Edition)'
-    processor      = 'Intel(R) Xeon(R) Linux64 CPU E5-2687W v3 3.10GHz'
-    cores          = '20 physical cores, 40 logical processors'
-    ram            = '256 GB RAM'
+    opsystem       = f"{platform.system()} {platform.release()} ({platform.platform()})"
+    processor      = platform.processor() or platform.machine()
+    try:
+        ram_gb = f"{round(psutil.virtual_memory().total / (1024**3))} GB"
+        cores = f"{psutil.cpu_count(logical=False)} physical cores, {psutil.cpu_count(logical=True)} logical processors"
+    except ImportError:
+        ram_gb = "Unknown RAM"
+        cores = f"{os.cpu_count()} cores"
+    ram            = ram_gb
 
     if all_data['modfile'] == 'jabr.mod' or all_data['modfile'] == 'jabr_mosek.mod':
         thefilevars.write('/JABRsolution : ' + all_data['casename'] + '\n')
     elif all_data['modfile'] == 'i2.mod' or all_data['modfile'] == 'i2_mosek.mod':
         thefilevars.write('/I2solution : ' + all_data['casename'] + '\n')
+    elif all_data['modfile'] == 'acopfqcqp.mod':
+        thefilevars.write('/ACQCQPsolution : ' + all_data['casename'] + '\n')
         
     thefilevars.write('/Date : ' + str(time.strftime('%m-%d-%Y %H:%M:%S %Z', time.localtime(now))) + '\n')
     thefilevars.write('/MachineName : ' + machinename + '\n')
@@ -638,7 +679,7 @@ def writesol_allvars(log,all_data):
     thefilevars.write('/OS : ' + opsystem + '\n')
     thefilevars.write('/Cores : ' + cores + '\n')
     thefilevars.write('/RAM : ' + ram + '\n')
-    thefilevars.write('/AMPL : ' + AMPL_version + '\n')
+    thefilevars.write(AMPL_version + '\n')
     thefilevars.write('/Solver : ' + solver_version + '\n')
     thefilevars.write('/Objvalue ' + str(all_data['objvalue']) + '\n')
     
@@ -733,7 +774,8 @@ def writesol_allvars(log,all_data):
     log.joint(' done writing SOCP allvars solution to .sol file\n\n')
         
     thefilevars.close()
-    
+
+#update later    
 def gosocp2(log,all_data):
 
     log.joint(' creating ampl object ...\n')
