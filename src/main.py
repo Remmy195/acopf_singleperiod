@@ -20,6 +20,7 @@ from versioner import *
 from log import danoLogger
 from ac import *
 from socp import *
+from graphics import *
 
 def read_config(log, filename):
 
@@ -140,7 +141,9 @@ if __name__ == '__main__':
         if not (s.startswith('knitro') or s.startswith('baron') or s.startswith('ipopt') or s.startswith('gurobi')):
             log.joint('Wrong solver/modfile, please check config file\n')
             exit(1)
+        print('Objective value: ')
         goac(log,all_data)
+        
 
     elif all_data['modfile'] == 'acopfqcqp.mod' or all_data['modfile'] == 'jabr.mod':
         if all_data['solver'] != 'mosek':
@@ -173,6 +176,11 @@ if __name__ == '__main__':
     else:
         log.joint('Wrong solver/modfile, please check config file\n')
         exit(1)
-        
+
+    solution = build_solution_dict_from_ampl(log,all_data)
+    solution_plot(all_data, solution, None)
+
+
+
     log.closelog()
 

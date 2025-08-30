@@ -20,6 +20,7 @@ import os
 import platform
 import socket
 import psutil
+from graphics import *
 
 def goac(log,all_data):
 
@@ -357,7 +358,9 @@ def goac(log,all_data):
     if all_data['writesol']:
         writesol(log,all_data)
         writesol_qcqp_allvars(log,all_data)
-
+    
+    solution = build_solution_dict_from_ampl(log,all_data)
+    solution_plot(all_data, solution, None)
             
 def writesol(log,all_data):
 
@@ -933,3 +936,34 @@ def readcuts(log,all_data):
     # numdic = {}
     # for numcuts in mostjabrs.values():
     #     if m
+
+
+def build_solution_dict_from_ampl(log, all_data):
+    """
+    Build a lightweight solution dict for gurobi_optimods plotting.
+    """
+
+    log.joint(' building solution dictionary for plotting...\n')
+
+    # Objective value
+    fval = float(all_data.get("objvalue", 0.0))
+
+    # Branch switching: mark all active (1) unless you have z-values
+    numbranches = len(all_data['branches'])
+    branch_list = [{"switching": 1} for _ in range(numbranches)]
+
+    # Generators: pull active power Pg from AMPL results
+    gens = all_data['gens']
+    GenPvalues = all_data['GenPvalues']
+    gen_list = []
+    for gcount in sorted(gens.keys()):
+        pg = float(GenPvalues[gcount])
+        gen_list.append({"Pg": pg})
+
+    solution = {
+        "f": fval,
+        "branch": branch_list,
+        "gen": gen_list,
+    }
+    return solution
+
